@@ -2,8 +2,8 @@ package com.lingyue.layerbridge.state
 
 import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
+import com.lingyue.layerbridge.core.LbPaths
 import com.lingyue.layerbridge.core.PathGuard
-import java.io.File
 
 /** 安装时记录的包关系，保持 Debian 控制文件原文，交由 RelationParser 解析。 */
 data class PackageRelations(
@@ -31,63 +31,52 @@ data class InstalledPackage(
 )
 
 /**
- * 简单的 TSV 状态库：installed.tsv + info/<package>.list。
+ * 状态库：`installed.tsv` + `info/<package>.list`，路径固定在前缀数据库目录。
  * 前 9 列固定，第 10 列是包关系/卸载钩子的 JSON，旧文件缺该列时按空值解析。
+ * 实际读写由 [StateStorage] 决定（App=su，CLI=直接文件）。
  */
-class StatusDb(private val rootDir: File) {
+class StatusDb(
+    private val storage: StateStorage,
+    private val rootDir: String = LbPaths.DB_DIR,
+) {
 
-    private val statusFile = File(rootDir, "installed.tsv")
-    private val infoDir = File(rootDir, "info")
+    private val statusPath: String get() = "$rootDir/installed.tsv"
 
-    fun load(): List<InstalledPackage> {
-        if (!statusFile.isFile) return emptyList()
-        return statusFile.readLines(Charsets.UTF_8).mapNotNull(::parseLine)
-    }
+    suspend fun load(): List<InstalledPackage> =
+        storage.readText(statusPath)?.lineSequence()?.mapNotNull(::parseLine)?.toList().orEmpty()
 
-    fun save(packages: List<InstalledPackage>) {
-        rootDir.mkdirs()
-        val text = serialize(packages)
-        val temp = File(rootDir, "installed.tsv.tmp")
-        temp.writeText(text, Charsets.UTF_8)
-        if (!temp.renameTo(statusFile)) {
-            statusFile.writeText(text, Charsets.UTF_8)
-            temp.delete()
-        }
+    suspend fun save(packages: List<InstalledPackage>) {
+        storage.writeText(statusPath, serialize(packages))
     }
 
     fun serialize(packages: List<InstalledPackage>): String =
         packages.sortedBy { it.name }.joinToString(separator = "\n", postfix = "\n") { encode(it) }
 
-    fun upsert(pkg: InstalledPackage) {
-        val packages = load().filterNot { it.name == pkg.name } + pkg
-        save(packages)
+    suspend fun upsert(pkg: InstalledPackage) {
+        save(load().filterNot { it.name == pkg.name } + pkg)
     }
 
-    fun remove(name: String) {
+    suspend fun remove(name: String) {
         save(load().filterNot { it.name == name })
-        File(infoDir, "$name.list").delete()
+        storage.delete(listPath(name))
     }
 
-    fun isInstalled(name: String): Boolean = load().any { it.name == name }
+    suspend fun find(name: String): InstalledPackage? = load().firstOrNull { it.name == name }
 
-    fun versionOf(name: String): String? = load().firstOrNull { it.name == name }?.version
+    suspend fun versionOf(name: String): String? = find(name)?.version
 
-    fun find(name: String): InstalledPackage? = load().firstOrNull { it.name == name }
-
-    fun writeFileList(name: String, paths: List<String>) {
-        if (!PathGuard.isPackageName(name)) throw IllegalArgumentException("非法包名：$name")
+    suspend fun writeFileList(name: String, paths: List<String>) {
+        require(PathGuard.isPackageName(name)) { "非法包名：$name" }
         val valid = paths.filter { PathGuard.isRelativePath(it) }.distinct()
-        infoDir.mkdirs()
-        File(infoDir, "$name.list").writeText(valid.joinToString("\n", postfix = "\n"), Charsets.UTF_8)
+        storage.writeText(listPath(name), valid.joinToString("\n", postfix = "\n"))
     }
 
-    fun readFileList(name: String): List<String> {
-        val file = File(infoDir, "$name.list")
-        if (!file.isFile) return emptyList()
-        return file.readLines(Charsets.UTF_8)
+    suspend fun readFileList(name: String): List<String> =
+        storage.readText(listPath(name))?.lines().orEmpty()
             .map { it.trim() }
             .filter { it.isNotEmpty() && PathGuard.isRelativePath(it) }
-    }
+
+    private fun listPath(name: String): String = "$rootDir/info/$name.list"
 
     private fun encode(pkg: InstalledPackage): String {
         val columns = mutableListOf(
@@ -129,7 +118,12 @@ class StatusDb(private val rootDir: File) {
 
     private fun encodeMeta(pkg: InstalledPackage): String {
         if (pkg.relations.isEmpty && pkg.removeHooks.isEmpty()) return ""
-        return gson.toJson(Meta(relations = pkg.relations.takeUnless { it.isEmpty }, removeHooks = pkg.removeHooks.ifEmpty { null }))
+        return gson.toJson(
+            Meta(
+                relations = pkg.relations.takeUnless { it.isEmpty },
+                removeHooks = pkg.removeHooks.ifEmpty { null },
+            ),
+        )
     }
 
     private fun decodeMeta(raw: String): Meta? {

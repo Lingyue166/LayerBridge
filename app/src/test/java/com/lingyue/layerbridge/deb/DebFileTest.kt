@@ -1,6 +1,7 @@
 package com.lingyue.layerbridge.deb
 
 import com.lingyue.layerbridge.state.InstalledPackage
+import com.lingyue.layerbridge.state.LocalStateStorage
 import com.lingyue.layerbridge.state.StatusDb
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream
@@ -11,6 +12,7 @@ import org.junit.Test
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.zip.GZIPOutputStream
+import kotlinx.coroutines.runBlocking
 
 class DebFileTest {
 
@@ -57,7 +59,7 @@ class DebFileTest {
     @Test
     fun statusDbRoundTrip() {
         val dir = createTempDir()
-        val db = StatusDb(dir)
+        val db = StatusDb(LocalStateStorage(), dir.absolutePath)
         val pkg = InstalledPackage(
             name = "hello",
             version = "1.0",
@@ -69,15 +71,17 @@ class DebFileTest {
             scan = "pass",
             scriptsStatus = "ok",
         )
-        db.upsert(pkg)
-        assertEquals(listOf(pkg), db.load())
+        runBlocking {
+            db.upsert(pkg)
+            assertEquals(listOf(pkg), db.load())
 
-        db.writeFileList("hello", listOf("bin/hello", "../evil", "share/doc/x"))
-        assertEquals(listOf("bin/hello", "share/doc/x"), db.readFileList("hello"))
+            db.writeFileList("hello", listOf("bin/hello", "../evil", "share/doc/x"))
+            assertEquals(listOf("bin/hello", "share/doc/x"), db.readFileList("hello"))
 
-        db.remove("hello")
-        assertTrue(db.load().isEmpty())
-        db.remove("ghost")
+            db.remove("hello")
+            assertTrue(db.load().isEmpty())
+            db.remove("ghost")
+        }
     }
 
     private fun createTempDir(): File = kotlin.io.path.createTempDirectory("lb-test").toFile()

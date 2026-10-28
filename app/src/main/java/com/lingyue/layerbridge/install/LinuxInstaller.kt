@@ -190,23 +190,18 @@ class LinuxInstaller(
                 if (postrm != null && !postrm.isSuccess) onLog("[lb] postrm 失败：$name")
                 maintainerScripts.clear(name)
 
-                syncPrefixDb()
                 writeEnvFile()
                 onLog("[lb] 已卸载 $name")
             }
         }
 
     suspend fun refreshEnvironment(): Result<Unit> = withContext(Dispatchers.IO) {
-        runCatching {
-            writeEnvFile()
-            syncPrefixDb()
-        }
+        runCatching { writeEnvFile() }
     }
 
     private suspend fun finishInstall(pkg: InstalledPackage, paths: List<String>, onLog: (String) -> Unit) {
         statusDb.upsert(pkg)
         statusDb.writeFileList(pkg.name, paths)
-        syncPrefixDb()
         writeEnvFile()
         writeWrappers(pkg.name, paths)
         onLog("[lb] 已安装 ${pkg.name} ${pkg.version}")
@@ -230,15 +225,6 @@ class LinuxInstaller(
                 "rmdir ${PathGuard.quote("${LbPaths.PREFIX}/$it")} 2>/dev/null || true"
             }
             Shell.script(script)
-        }
-    }
-
-    private suspend fun syncPrefixDb() {
-        val packages = statusDb.load()
-        Shell.writeFile("${LbPaths.DB_DIR}/installed.tsv", statusDb.serialize(packages), "644")
-        packages.forEach { pkg ->
-            val list = statusDb.readFileList(pkg.name).joinToString("\n", postfix = "\n")
-            Shell.writeFile("${LbPaths.DB_DIR}/info/${pkg.name}.list", list, "644")
         }
     }
 

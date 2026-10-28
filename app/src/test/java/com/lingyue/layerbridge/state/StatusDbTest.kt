@@ -1,6 +1,7 @@
 package com.lingyue.layerbridge.state
 
 import org.junit.Assert.assertEquals
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -31,7 +32,7 @@ class StatusDbTest {
 
     @Test
     fun roundTripsRelationsAndRemoveHooks() {
-        val db = StatusDb(tmp.root)
+        val db = StatusDb(LocalStateStorage(), tmp.root.absolutePath)
         val original = pkg(
             relations = PackageRelations(
                 depends = "libc",
@@ -42,8 +43,10 @@ class StatusDbTest {
             removeHooks = listOf("on-remove"),
         )
 
-        db.upsert(original)
-        val loaded = db.load().single()
+        runBlocking {
+            db.upsert(original)
+        }
+        val loaded = runBlocking { db.load().single() }
 
         assertEquals(original.relations, loaded.relations)
         assertEquals(original.removeHooks, loaded.removeHooks)
@@ -55,7 +58,7 @@ class StatusDbTest {
     fun readsLegacyNineColumnRow() {
         tmp.root.resolve("installed.tsv").writeText("foo\t1.0\taarch64\tdeb\ttest\t2026-01-01T00:00:00Z\t\tpass\tok\n")
 
-        val loaded = StatusDb(tmp.root).load().single()
+        val loaded = runBlocking { StatusDb(LocalStateStorage(), tmp.root.absolutePath).load().single() }
 
         assertEquals("foo", loaded.name)
         assertEquals(PackageRelations(), loaded.relations)
@@ -64,8 +67,8 @@ class StatusDbTest {
 
     @Test
     fun omitsMetaColumnWhenEmpty() {
-        val db = StatusDb(tmp.root)
-        db.upsert(pkg())
+        val db = StatusDb(LocalStateStorage(), tmp.root.absolutePath)
+        runBlocking { db.upsert(pkg()) }
 
         val line = tmp.root.resolve("installed.tsv").readText().trimEnd('\n')
 

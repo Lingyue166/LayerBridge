@@ -16,6 +16,7 @@ import com.lingyue.layerbridge.repo.RepoConfig
 import com.lingyue.layerbridge.repo.RepoPackage
 import com.lingyue.layerbridge.repo.ResolveOutcome
 import com.lingyue.layerbridge.state.InstalledPackage
+import com.lingyue.layerbridge.state.RootStateStorage
 import com.lingyue.layerbridge.state.StatusDb
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -46,7 +47,7 @@ data class UiState(
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val prefs = application.getSharedPreferences("lb", Application.MODE_PRIVATE)
-    private val statusDb = StatusDb(File(application.filesDir, "state"))
+    private val statusDb = StatusDb(RootStateStorage())
     private val trustStore = TrustStore(File(application.filesDir, "trust"))
     private val installer = LinuxInstaller(statusDb, trustStore)
     private val repo = RepoConfig.termux
