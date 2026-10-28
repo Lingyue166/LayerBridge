@@ -1,0 +1,7 @@
+#!/system/bin/sh
+APK=/data/local/lb/lb.apk
+if [ ! -f "$APK" ]; then
+  APK=$(pm path com.lingyue.layerbridge 2>/dev/null | head -1 | cut -d: -f2)
+fi
+[ -n "$APK" ] || { echo "lb: APK not found" >&2; exit 1; }
+exec app_process -Djava.class.path="$APK" /system/bin com.lingyue.layerbridge.cli.LbMain "$@"
