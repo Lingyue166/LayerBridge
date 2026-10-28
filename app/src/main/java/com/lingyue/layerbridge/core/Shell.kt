@@ -2,7 +2,6 @@ package com.lingyue.layerbridge.core
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.OutputStream
 import java.util.concurrent.TimeUnit
@@ -27,15 +26,19 @@ object Shell {
         runCatching { exec("id -u", timeoutMs = 10_000).output.trim() == "0" }.getOrDefault(false)
     }
 
-    suspend fun exec(command: String, timeoutMs: Long = 120_000): ExecResult =
-        withContext(Dispatchers.IO) {
-            runProcess(DEFAULT_LAUNCHER, command, timeoutMs) { }
-        }
+    suspend fun exec(
+        command: String,
+        timeoutMs: Long = 120_000,
+        onLine: ((String) -> Unit)? = null,
+    ): ExecResult = withContext(Dispatchers.IO) {
+        runProcess(DEFAULT_LAUNCHER, command, timeoutMs, onLine) { }
+    }
 
     suspend fun script(
         body: String,
         env: Map<String, String> = emptyMap(),
         timeoutMs: Long = 600_000,
+        onLine: ((String) -> Unit)? = null,
     ): ExecResult = withContext(Dispatchers.IO) {
         val exports = env.entries.joinToString("\n") { (key, value) ->
             "export $key=${PathGuard.quote(value)}"
@@ -44,7 +47,7 @@ object Shell {
             if (exports.isNotEmpty()) appendLine(exports)
             appendLine(body)
         }
-        runProcess(DEFAULT_LAUNCHER, "sh -s", timeoutMs) { output ->
+        runProcess(DEFAULT_LAUNCHER, "sh -s", timeoutMs, onLine) { output ->
             output.write(script.toByteArray(Charsets.UTF_8))
         }
     }
@@ -61,15 +64,16 @@ object Shell {
             append("cat > ${PathGuard.quote(path)}")
             if (mode != null) append(" && chmod $mode ${PathGuard.quote(path)}")
         }
-        runProcess(DEFAULT_LAUNCHER, command, timeoutMs) { it.write(content.toByteArray(Charsets.UTF_8)) }
+        runProcess(DEFAULT_LAUNCHER, command, timeoutMs, null) { it.write(content.toByteArray(Charsets.UTF_8)) }
     }
 
     suspend fun extractTar(
         prefix: String,
         timeoutMs: Long = 900_000,
+        onLine: ((String) -> Unit)? = null,
         writer: (OutputStream) -> Unit,
     ): ExecResult = withContext(Dispatchers.IO) {
-        runProcess(DEFAULT_LAUNCHER, "tar -x -f - -C ${PathGuard.quote(prefix)}", timeoutMs, writer)
+        runProcess(DEFAULT_LAUNCHER, "tar -x -f - -C ${PathGuard.quote(prefix)}", timeoutMs, onLine, writer)
     }
 
     /**
@@ -81,6 +85,7 @@ object Shell {
         launcher: List<String>,
         command: String,
         timeoutMs: Long,
+        onLine: ((String) -> Unit)? = null,
         stdin: (OutputStream) -> Unit,
     ): ExecResult {
         val process = try {
@@ -91,17 +96,17 @@ object Shell {
             return ExecResult(-1, "[lb] 无法启动进程：${e.message}")
         }
 
-        val output = ByteArrayOutputStream()
+        val output = StringBuilder()
         val reader = thread(name = "lb-stdout", isDaemon = true) {
             try {
-                process.inputStream.use { input ->
-                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                process.inputStream.bufferedReader(Charsets.UTF_8).use { input ->
                     while (true) {
-                        val count = input.read(buffer)
-                        if (count < 0) break
-                        if (output.size() < MAX_OUTPUT) {
-                            output.write(buffer, 0, minOf(count, MAX_OUTPUT - output.size()))
+                        val line = input.readLine() ?: break
+                        if (output.length < MAX_OUTPUT) {
+                            output.append(line.take(MAX_OUTPUT - output.length))
+                            if (output.length < MAX_OUTPUT) output.append('\n')
                         }
+                        onLine?.invoke(line)
                     }
                 }
             } catch (_: IOException) {
@@ -128,7 +133,7 @@ object Shell {
         reader.join(2_000)
         writer.join(2_000)
 
-        val text = output.toString(Charsets.UTF_8.name())
+        val text = output.toString()
         if (!finished) return ExecResult(-1, "$text\n[lb] 命令超时")
         writeFailure?.let { return ExecResult(-1, "$text\n[lb] ${it.message}") }
         return ExecResult(process.exitValue(), text)

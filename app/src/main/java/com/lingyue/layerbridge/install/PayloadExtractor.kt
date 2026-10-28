@@ -63,7 +63,7 @@ object PayloadExtractor {
         body: (TarArchiveOutputStream, MutableList<String>) -> Unit,
     ): List<String> {
         val paths = mutableListOf<String>()
-        val result = Shell.extractTar(LbPaths.PREFIX) { output ->
+        val result = Shell.extractTar(LbPaths.PREFIX, onLine = onLog) { output ->
             TarArchiveOutputStream(output).use { tar ->
                 tar.setLongFileMode(TarArchiveOutputStream.LONGFILE_POSIX)
                 body(tar, paths)

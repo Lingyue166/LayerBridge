@@ -13,7 +13,7 @@ class ShellTest {
         val result = Shell.runProcess(sh, "printf hi; exit 3", 5_000) { }
 
         assertEquals(3, result.exitCode)
-        assertEquals("hi", result.output)
+        assertEquals("hi", result.output.trim())
     }
 
     @Test
@@ -21,7 +21,18 @@ class ShellTest {
         val result = Shell.runProcess(sh, "cat", 5_000) { it.write("hello".toByteArray()) }
 
         assertEquals(0, result.exitCode)
-        assertEquals("hello", result.output)
+        assertEquals("hello", result.output.trim())
+    }
+
+    @Test
+    fun streamsLinesToCallback() {
+        val lines = mutableListOf<String>()
+
+        val result = Shell.runProcess(sh, "printf 'a\\nb\\nc'", 5_000, onLine = { lines += it }) { }
+
+        assertEquals(0, result.exitCode)
+        assertEquals(listOf("a", "b", "c"), lines)
+        assertEquals("a\nb\nc", result.output.trim())
     }
 
     @Test

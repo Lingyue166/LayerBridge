@@ -36,9 +36,8 @@ class MaintainerScripts(private val rootDir: String = DB_SCRIPTS) {
             if (args.isNotEmpty()) appendLine("set -- " + args.joinToString(" ") { PathGuard.quote(it) })
             appendLine("exec sh ${PathGuard.quote(path)} \"\$@\"")
         }
-        val result = Shell.script(body, env(packageName, version))
-        if (result.output.isNotBlank()) onLog(result.output)
-        return result
+        // 输出逐行实时转发，调用方无需等脚本结束再打印整段日志。
+        return Shell.script(body, env(packageName, version), onLine = onLog)
     }
 
     suspend fun clear(packageName: String) {
