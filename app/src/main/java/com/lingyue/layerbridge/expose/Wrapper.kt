@@ -1,6 +1,6 @@
 package com.lingyue.layerbridge.expose
 
-import com.lingyue.layerbridge.core.LbPaths
+import com.lingyue.layerbridge.core.EnvFile
 import com.lingyue.layerbridge.core.PathGuard
 
 /** 某个包对某条命令的提供关系；target 是前缀内的相对路径。 */
@@ -15,7 +15,6 @@ object Wrapper {
     /** 生成 /system/bin 下的转发脚本。commandPath 必须是前缀内的相对路径。 */
     fun script(
         commandPath: String,
-        prefix: String = LbPaths.PREFIX,
         extraEnv: Map<String, String> = emptyMap(),
         owner: String? = null,
     ): String {
@@ -29,13 +28,7 @@ object Wrapper {
             appendLine("#!/system/bin/sh")
             if (owner != null) appendLine("$OWNER_PREFIX$owner")
             appendLine("$TARGET_PREFIX$commandPath")
-            appendLine("LB_PREFIX=${PathGuard.quote(prefix)}")
-            appendLine("export LB_PREFIX")
-            appendLine("export PREFIX=\"\$LB_PREFIX\"")
-            appendLine("case \":\$PATH:\" in *\":\$LB_PREFIX/bin:\"*) ;; *) export PATH=\"\$LB_PREFIX/bin:\$PATH\" ;; esac")
-            appendLine("export LD_LIBRARY_PATH=\"\$LB_PREFIX/lib\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}\"")
-            appendLine("export HOME=\"\${HOME:-${LbPaths.HOME}}\"")
-            appendLine("export TMPDIR=\"\$LB_PREFIX/tmp\"")
+            append(EnvFile.render())
             envLines.forEach { appendLine(it) }
             appendLine("exec \"\$LB_PREFIX/${commandPath}\" \"\$@\"")
         }

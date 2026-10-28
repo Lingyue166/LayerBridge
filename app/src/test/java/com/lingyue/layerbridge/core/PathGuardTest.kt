@@ -37,6 +37,13 @@ class PathGuardTest {
     }
 
     @Test
+    fun ancestorsAreDeduplicatedAndDeepestFirst() {
+        val paths = listOf("bin/foo", "share/doc/a.txt", "share/doc/b.txt", "share/readme")
+        assertEquals(listOf("share/doc", "share", "bin"), PathGuard.ancestors(paths))
+        assertEquals(emptyList<String>(), PathGuard.ancestors(listOf("top")))
+    }
+
+    @Test
     fun quoting() {
         assertEquals("'abc'", PathGuard.quote("abc"))
         assertEquals("'a'\\''b'", PathGuard.quote("a'b"))

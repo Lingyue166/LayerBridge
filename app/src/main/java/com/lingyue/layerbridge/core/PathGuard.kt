@@ -25,5 +25,14 @@ object PathGuard {
         return if (target.startsWith(rootPath)) target.toFile() else null
     }
 
+    /** 相对路径的父目录链，去重后按长度倒序（先深后浅），用于卸载后清理空目录。 */
+    fun ancestors(paths: List<String>): List<String> = paths.asSequence()
+        .map { it.substringBeforeLast('/', "") }
+        .filter { it.isNotEmpty() }
+        .flatMap { path -> generateSequence(path) { parent -> parent.substringBeforeLast('/', "").ifEmpty { null } } }
+        .distinct()
+        .sortedByDescending { it.length }
+        .toList()
+
     fun quote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
 }

@@ -1,5 +1,6 @@
 package com.lingyue.layerbridge.cli
 
+import com.lingyue.layerbridge.core.EnvFile
 import com.lingyue.layerbridge.core.LbPaths
 import java.io.File
 
@@ -41,11 +42,7 @@ object LbMain {
 
     private fun env() {
         val file = File(LbPaths.ENV_FILE)
-        if (file.isFile) print(file.readText()) else {
-            println("export PREFIX=${LbPaths.PREFIX}")
-            println("export PATH=${LbPaths.PREFIX}/bin:${LbPaths.PREFIX}/sbin:\$PATH")
-            println("export LD_LIBRARY_PATH=${LbPaths.PREFIX}/lib")
-        }
+        if (file.isFile) print(file.readText()) else print(EnvFile.render())
     }
 
     private fun list() {
