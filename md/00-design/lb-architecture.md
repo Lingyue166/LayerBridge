@@ -36,12 +36,12 @@ LayerBridge 是 **Android 原生的 Linux 软件包管理方案**，由三部分
 
 | 编号 | 需求 | 落地方式 |
 |---|---|---|
-| R1 | 热安装 / 热卸载 | 只改 `/data/local/lb` 与 overlay upper，不重启 |
+| R1 | 热安装 / 热卸载 | 只改 `/data/adb/lb` 与 overlay upper，不重启 |
 | R2 | 模块安装一次，重启后生效 | 模块写入 `/data/adb/modules/lb`，重启时由管理器挂载 |
 | R3 | 大部分包自动加入交互 shell 环境 | `env.sh` + 模块注入的 `mkshrc` |
 | R4 | 钩子 / 依赖自动处理，无须重启 | 依赖拓扑安装；维护脚本立即执行；开机钩子模块重放 |
 | R5 | 模块简称 `lb`，命令 `lb` | 模块 id `lb`；`/system/bin/lb` |
-| R6 | `lb` 在任意终端可执行 | `/system/bin/lb` + `/data/local/lb/bin/lb` 双入口 |
+| R6 | `lb` 在任意终端可执行 | `/system/bin/lb` + `/data/adb/lb/bin/lb` 双入口 |
 | R7 | 所有 root 应用能用已安装命令并获得正确环境 | `/system/bin` wrapper + overlay 热合并 |
 | R8 | 支持 CLI 与 GUI 包；GUI 运行时不在 lb 内 | 两种格式统一安装；保留 `DISPLAY`/`XDG_RUNTIME_DIR` |
 | R9 | 包不能是 root 管理器模块；只收通用格式或 lb 格式 | 接受 `.deb` 与 LBPA；拒绝 `module.prop`/`customize.sh`/zip |
@@ -59,7 +59,7 @@ LayerBridge 是 **Android 原生的 Linux 软件包管理方案**，由三部分
 
 | 术语 | 含义 |
 |---|---|
-| 前缀（prefix） | Linux 用户态根目录，默认 `/data/local/lb/usr` |
+| 前缀（prefix） | Linux 用户态根目录，默认 `/data/adb/lb/usr` |
 | 热路径 | 不重启、不修改 `/system` 静态内容的运行时操作 |
 | 冷路径 | 需要重启或重挂载的操作（仅模块首次安装） |
 | 模块 | 位于 `/data/adb/modules/lb` 的 Magisk 格式模块 |
@@ -90,7 +90,7 @@ LayerBridge 是 **Android 原生的 Linux 软件包管理方案**，由三部分
            │ su 脚本 / tar 流                  │ 写 upper / 模块目录
            ▼                                  ▼
 ┌──────────────────────────────┐   ┌───────────────────────────┐
-│  /data/local/lb              │   │  /system/bin（overlay）   │
+│  /data/adb/lb              │   │  /system/bin（overlay）   │
 │  usr/ bin/ env.sh            │   │  hello → wrapper          │
 │  system/{bin,upper,work}     │   │  lb → 模块入口            │
 │  db/ hooks/ cache/           │   └───────────────────────────┘
@@ -112,11 +112,13 @@ LayerBridge 是 **Android 原生的 Linux 软件包管理方案**，由三部分
 | 模块 | `lb` 入口、overlay 挂载、环境注入、开机钩子 | 包下载、依赖解析 |
 | 元模块 | 可选：把模块 `system/` 热合并到 `/system` | 包管理逻辑 |
 
-### 4.2 为什么前缀放在 `/data/local/lb`
+### 4.2 为什么前缀放在 `/data/adb/lb`
 
-- `/data/local` 下的文件（如 `adb push` 到 `/data/local/tmp`）可被 `shell` 域执行，普通交互 shell 能直接跑包内命令。
-- `/data/adb` 适合 root 专用数据，但普通 shell 执行其下二进制常受 SELinux 限制。
-- 结论：**包文件放 `/data/local/lb`，模块静态文件放 `/data/adb/modules/lb`，状态库放 `/data/local/lb/db`。**
+- `/data/adb` 的父目录是 `700 root:root`，普通应用**连遍历都不行**，`stat` 也会失败——
+  安装的包、状态库、脚本对非 root 完全不可见。
+- 代价：命令必须经 `su -c 'lb shell'` / `lb exec` 使用，普通 shell 不能直接敲；
+  这与「默认隐藏」的决策一致（见 ADR 0007、0008）。
+- 结论：**包文件与状态放 `/data/adb/lb`，模块静态文件放 `/data/adb/modules/lb`。**
 
 ### 4.3 为什么包不能是 root 管理器模块
 
@@ -139,7 +141,7 @@ LayerBridge 是 **Android 原生的 Linux 软件包管理方案**，由三部分
 ├── system/etc/mkshrc                 # 注入 env.sh
 └── system/bin/…                      # 元模块后端的 wrapper 同步目录
 
-/data/local/lb/                       # 运行时数据（root 写，shell 可读/执行）
+/data/adb/lb/                       # 运行时数据（root 写，shell 可读/执行）
 ├── usr/                              # 包前缀
 │   ├── bin/ lib/ share/ etc/ var/
 │   └── tmp/
@@ -209,8 +211,8 @@ md/                                    # 设计与变更记录
 9. 更新状态库（版本、来源、文件清单、签名者、检测结果）。
 10. 重写 `env.sh`。
 11. 为包内每个可执行文件生成 wrapper：
-    - 写入 `/data/local/lb/system/bin/<cmd>`（备份）；
-    - 写入 overlay upper `/data/local/lb/system/upper/<cmd>`（系统可见）；
+    - 写入 `/data/adb/lb/system/bin/<cmd>`（备份）；
+    - 写入 overlay upper `/data/adb/lb/system/upper/<cmd>`（系统可见）；
     - 元模块后端则写入 `/data/adb/modules/lb/system/bin/<cmd>`；
     - 与 `/system/bin` 同名命令默认跳过，需显式覆盖。
 12. 执行该包注册的钩子（`hooks/`），依赖包的钩子已先执行。
@@ -233,7 +235,7 @@ md/                                    # 设计与变更记录
 
 - **`/system/bin` 下的命令**：依靠启动时建立的 overlay（或元模块）热合并，所有进程（含 root 应用）按名查找即可见；wrapper 内部设置环境。
 - **交互 shell**：`mkshrc` 自动 source `env.sh`，无需重启。
-- **已开 shell**：`. /data/local/lb/env.sh` 或 `lb shell`。
+- **已开 shell**：`. /data/adb/lb/env.sh` 或 `lb shell`。
 - **已运行进程的环境变量**：无法回溯修改；通过 wrapper/新进程获得环境是唯一可靠方式。
 
 ---
@@ -255,16 +257,16 @@ description=Android 原生 Linux 包管理器：lb 命令、系统级暴露、�
 
 | 文件 | 作用 |
 |---|---|
-| `post-fs-data.sh` | 创建 `/data/local/lb` 子目录、备份 `mkshrc`、建立 overlay（自有后端） |
+| `post-fs-data.sh` | 创建 `/data/adb/lb` 子目录、备份 `mkshrc`、建立 overlay（自有后端） |
 | `service.sh` | 以 root 依次执行 `hooks/*.sh`，并校验 overlay 挂载状态 |
-| `system/bin/lb` | 启动 CLI：`app_process` 加载 `/data/local/lb/lb.apk` |
+| `system/bin/lb` | 启动 CLI：`app_process` 加载 `/data/adb/lb/lb.apk` |
 | `system/etc/mkshrc` | 先 source 原始 mkshrc，再 source `env.sh` |
 
 `system/bin/lb` 草案：
 
 ```sh
 #!/system/bin/sh
-APK=/data/local/lb/lb.apk
+APK=/data/adb/lb/lb.apk
 [ -f "$APK" ] || { echo "lb: $APK missing" >&2; exit 1; }
 exec app_process -Djava.class.path="$APK" /system/bin \
     com.lingyue.layerbridge.cli.LbMain "$@"
@@ -272,13 +274,13 @@ exec app_process -Djava.class.path="$APK" /system/bin \
 
 ### 7.3 安装方式
 
-- **App 自动安装（默认）**：通过 su 把 `assets/module` 写入 `/data/adb/modules/lb`，并把自身 APK 复制为 `/data/local/lb/lb.apk`；提示“重启后 lb 生效”。这是唯一需要重启的步骤。
+- **App 自动安装（默认）**：通过 su 把 `assets/module` 写入 `/data/adb/modules/lb`，并把自身 APK 复制为 `/data/adb/lb/lb.apk`；提示“重启后 lb 生效”。这是唯一需要重启的步骤。
 - **zip 安装（备用）**：`scripts/build-module.sh` 产出 `lb-module.zip`，可在管理器里手动安装。
-- App 同时写 `/data/local/lb/bin/lb`，重启前也可显式调用。
+- App 同时写 `/data/adb/lb/bin/lb`，重启前也可显式调用。
 
 ### 7.4 卸载
 
-- 管理器卸载模块 → 开机不再注入/挂载；`/data/local/lb` 保留（内含已装包）。
+- 管理器卸载模块 → 开机不再注入/挂载；`/data/adb/lb` 保留（内含已装包）。
 - App 提供“清空前缀”危险操作，需二次确认。
 
 ---
@@ -293,11 +295,11 @@ exec app_process -Djava.class.path="$APK" /system/bin \
 
 ```sh
 #!/system/bin/sh
-LB_PREFIX=/data/local/lb/usr
+LB_PREFIX=/data/adb/lb/usr
 export LB_PREFIX PREFIX="$LB_PREFIX"
 export PATH="$LB_PREFIX/bin:$PATH"
 export LD_LIBRARY_PATH="$LB_PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-export HOME="${HOME:-/data/local/lb/home}"
+export HOME="${HOME:-/data/adb/lb/home}"
 export TMPDIR="$LB_PREFIX/tmp"
 # 保留调用方的图形环境，不覆盖
 : "${DISPLAY:=}"; : "${XDG_RUNTIME_DIR:=}"; : "${WAYLAND_DISPLAY:=}"
@@ -312,15 +314,15 @@ exec "$LB_PREFIX/bin/<cmd>" "$@"
 
 | 后端 | 机制 | 热生效 | 覆盖范围 | 备注 |
 |---|---|---|---|---|
-| **overlay（默认）** | 模块 `post-fs-data.sh` 在 zygote 前把 `/system/bin` 叠加为 overlay，`upper=/data/local/lb/system/upper` | 是（upper 写入即时可见） | 所有进程（含 root 应用） | 需要内核 overlayfs；失败自动降级 |
+| **overlay（可选，ADR 0007；默认关闭）** | 模块 `post-fs-data.sh` 在 zygote 前把 `/system/bin` 叠加为 overlay，`upper=/data/adb/lb/system/upper` | 是（upper 写入即时可见） | 所有进程（含 root 应用） | 需要内核 overlayfs；失败自动降级 |
 | **元模块** | 第三方元模块把 `/data/adb/modules/lb/system` 热合并 | 是 | 所有进程 | 与已有 overlay 方案冲突时二选一 |
 | **mkshrc（降级）** | 仅交互 shell 注入 `env.sh` | 是 | 交互 shell | 无系统级命令暴露 |
 
 overlay 挂载草案（`post-fs-data.sh`）：
 
 ```sh
-U=/data/local/lb/system/upper
-W=/data/local/lb/system/work
+U=/data/adb/lb/system/upper
+W=/data/adb/lb/system/work
 mkdir -p "$U" "$W"
 mount -t overlay overlay \
   -o "lowerdir=/system/bin,upperdir=$U,workdir=$W" \
@@ -343,11 +345,11 @@ mount -t overlay overlay \
 模块的 `system/etc/mkshrc`：
 
 ```sh
-[ -f /data/local/lb/mkshrc.orig ] && . /data/local/lb/mkshrc.orig
-[ -f /data/local/lb/env.sh ] && . /data/local/lb/env.sh
+[ -f /data/adb/lb/mkshrc.orig ] && . /data/adb/lb/mkshrc.orig
+[ -f /data/adb/lb/env.sh ] && . /data/adb/lb/env.sh
 ```
 
-安装模块时把当前 `/system/etc/mkshrc` 备份到 `/data/local/lb/mkshrc.orig`，避免丢失系统默认行为。
+安装模块时把当前 `/system/etc/mkshrc` 备份到 `/data/adb/lb/mkshrc.orig`，避免丢失系统默认行为。
 
 ### 8.5 `lb shell` / `lb run`
 
@@ -487,7 +489,7 @@ package  version  architecture  format  repo  installedAt  signer  scan  scripts
 
 | 问题 | 处理 |
 |---|---|
-| shebang 写死 Termux 前缀 | 安装时改写为 `/data/local/lb/usr` |
+| shebang 写死 Termux 前缀 | 安装时改写为 `/data/adb/lb/usr` |
 | 动态库 rpath 指向 Termux lib | wrapper/环境注入 `LD_LIBRARY_PATH=$PREFIX/lib`（`DT_RUNPATH` 下优先生效） |
 | 脚本依赖 `$PREFIX` | `env.sh`/wrapper 设置 `PREFIX` |
 | Python 编译期前缀 | 运行 `python` 时设 `PYTHONHOME=$PREFIX`（包装/环境处理） |
@@ -502,7 +504,7 @@ package  version  architecture  format  repo  installedAt  signer  scan  scripts
 Termux 包把 `/data/data/com.termux/files/usr` 写死在 shebang、rpath、脚本里。默认策略是重写 shebang + wrapper 环境；对仍有绝对路径依赖的包，可开启：
 
 ```sh
-ln -s /data/local/lb/usr /data/data/com.termux/files/usr
+ln -s /data/adb/lb/usr /data/data/com.termux/files/usr
 ```
 
 - 仅当 Termux 未安装时允许；检测到 Termux 则禁用并提示。
@@ -520,7 +522,7 @@ ln -s /data/local/lb/usr /data/data/com.termux/files/usr
 
 ### 11.2 注册钩子
 
-- 路径：`/data/local/lb/hooks/<package>-<name>.sh`。
+- 路径：`/data/adb/lb/hooks/<package>-<name>.sh`。
 - 来源：deb 内 `lb-hooks/` 或用户 `lb hook add`。
 - 安装后立即执行一次；模块 `service.sh` 开机按文件名顺序重放。
 - 钩子失败只记录，不阻塞开机。
@@ -535,7 +537,7 @@ ln -s /data/local/lb/usr /data/data/com.termux/files/usr
 
 ## 12. overlay 与元模块
 
-### 12.1 自有 overlay（默认）
+### 12.1 自有 overlay（可选，ADR 0007 起默认关闭）
 
 - 模块 `post-fs-data.sh` 挂载 overlay 到 `/system/bin`。
 - 热安装写 upper，命令即时可见；卸载删 upper 文件，即时消失。
@@ -559,7 +561,7 @@ ln -s /data/local/lb/usr /data/data/com.termux/files/usr
 
 ### 13.1 启动方式
 
-模块 `/system/bin/lb` → `app_process` 加载 `/data/local/lb/lb.apk` → `com.lingyue.layerbridge.cli.LbMain`。以 shell 身份运行；需要 root 的步骤内部调用 `su`。
+模块 `/system/bin/lb` → `app_process` 加载 `/data/adb/lb/lb.apk` → `com.lingyue.layerbridge.cli.LbMain`。以 shell 身份运行；需要 root 的步骤内部调用 `su`。
 
 ### 13.2 命令
 
@@ -646,7 +648,7 @@ ln -s /data/local/lb/usr /data/data/com.termux/files/usr
     └── 包签名（二级/叶证书私钥）
 ```
 
-- 信任锚：用户根证书公钥，固定在 `/data/local/lb/trust/root.json`；只有链到该根的签名才被接受。
+- 信任锚：用户根证书公钥，固定在 `/data/adb/lb/trust/root.json`；只有链到该根的签名才被接受。
 - 二级证书可签发给社区构建者；他们签的包视为授权包。
 - 算法：ECDSA P-256 + SHA-256；证书为 JSON（语义对齐 X.509：链、有效期、用途、路径长度、包名前缀约束）。
 - LBPA 签名在文件尾部 footer；deb 使用同名 `.sig` 分离签名。
@@ -658,7 +660,7 @@ ln -s /data/local/lb/usr /data/data/com.termux/files/usr
 
 apt 仓库不对单个 deb 签名，而是对索引签名。lb 接受这条路径，默认信任 Termux 官方仓库：
 
-- 信任仓库列表：`/data/local/lb/trust/repos/<id>.json`，默认预置 `termux-main`。
+- 信任仓库列表：`/data/adb/lb/trust/repos/<id>.json`，默认预置 `termux-main`。
 - 条目内容：`url`、`keyFingerprint`、`keyFile`（公钥）、`suite`/`component`、`architectures`、`enabled`。
 - 验证链：
   1. 取 `Release` + `Release.gpg`（或 `InRelease`），用固定指纹的 OpenPGP 公钥验证；
@@ -691,7 +693,7 @@ apt 仓库不对单个 deb 签名，而是对索引签名。lb 接受这条路�
 
 删除策略：
 
-- lb 下载到 `/data/local/lb/cache` 的包：命中阻断立即删除。
+- lb 下载到 `/data/adb/lb/cache` 的包：命中阻断立即删除。
 - 用户通过 SAF 导入的原始文件：移入隔离区并提示，确认后删除；避免误删用户数据。
 - 误报：只能通过开发者模式关闭自动检测；关闭后仍执行结构校验。
 
@@ -701,7 +703,7 @@ apt 仓库不对单个 deb 签名，而是对索引签名。lb 接受这条路�
 - 两个**独立**开关，默认都开启：
   1. **强制授权签名**（`require_signature`）——关闭后允许未签名包；但“有签名却验证失败”仍拒绝。
   2. **自动恶意检测**（`malware_scan`）——关闭后跳过启发式规则；结构校验仍执行。
-- 配置：`/data/local/lb/config.json`，CLI 可改：`lb config set require_signature false`。
+- 配置：`/data/adb/lb/config.json`，CLI 可改：`lb config set require_signature false`。
 - UI 常驻警告条；关闭状态记录日志；重新开启立即生效。
 
 ### 15.4 通用安全
@@ -714,7 +716,7 @@ apt 仓库不对单个 deb 签名，而是对索引签名。lb 接受这条路�
 - **LBPA 先验魔数再解析**：header 越界、manifest 超 1 MiB、`formatVersion` 不支持、payload 哈希不符 → 拒绝。
 - **LBPA 路径校验**：绝对路径、`..`、反斜杠、重复条目、未知顶层目录、设备/FIFO 条目 → 拒绝。
 - **LBPA 解包防越界**：先解压到暂存目录并校验符号链接/硬链接，再合并进前缀；清除 setuid/setgid/sticky。
-- wrapper 只允许指向 `/data/local/lb/usr` 内的路径；生成时校验命令名与真实路径。
+- wrapper 只允许指向 `/data/adb/lb/usr` 内的路径；生成时校验命令名与真实路径。
 - 不提供任意命令执行 UI（终端除外，后续单独设计）。
 - 模块/overlay 写入限定固定路径；拒绝跟随符号链接写入。
 
@@ -820,8 +822,8 @@ unzip -l build/lb-module.zip
 
 ## 20. 待确认
 
-1. 前缀默认 `/data/local/lb/usr` 是否接受？
-2. 系统暴露默认用 **自有 overlay**，元模块作为备选，是否接受？
+1. 前缀默认 `/data/adb/lb/usr` 是否接受？
+2. 系统暴露默认 **关闭**（ADR 0007）；需要时用自有 overlay，元模块作为备选。
 3. 模块由 App 自动写入 `/data/adb/modules/lb` + 一次重启，同时提供 zip，是否接受？
 4. 根私钥：只允许离线导入，还是允许 `lb ca init` 在设备生成并保存？
 5. 本地导入的恶意包：默认隔离+确认删除，还是直接删除？
@@ -840,7 +842,7 @@ lb install hello
 
 # 查看环境
 lb env
-. /data/local/lb/env.sh
+. /data/adb/lb/env.sh
 
 # 进入带环境的 shell
 lb shell

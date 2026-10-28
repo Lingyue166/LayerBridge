@@ -23,7 +23,7 @@ Android 原生的 Linux 包管理器：把 bionic/aarch64 的 Linux 包安装到
 - 恶意检测：脚本规则扫描，命中阻断安装。
 - 默认隐藏（ADR 0007）：前缀 `700`，wrapper 只写 `$BASE/system/bin`，不写 `/system/bin`、不挂 overlay，普通应用无法发现或执行。
 - 可选系统暴露：存在 `$BASE/config/expose-system` 时恢复 overlay + 模块 bin + mkshrc 注入（会在 mount 表留痕）。
-- 状态库单一来源：`/data/local/lb/db`（App 经 su 读写，CLI 直接读写），见 [ADR 0006](md/60-changes/adr/0006-single-state-source.md)。
+- 状态库单一来源：`/data/adb/lb/db`（App 经 su 读写，CLI 直接读写），见 [ADR 0006](md/60-changes/adr/0006-single-state-source.md)。
 - `lb` 命令：env / list / info / doctor / shell / exec / install / upgrade / remove [--force] / purge，`lb cli` 交互模式；输出逐行实时打印。
 
 尚未完成 / 已知限制：
@@ -61,7 +61,7 @@ bash scripts/build-module.sh
 ## 使用
 
 1. 安装 APK，授予 root（KernelSU/SukiSU 在管理器内授权；Magisk 首次弹窗）。
-2. 环境页 →“初始化前缀”，创建 `/data/local/lb` 并复制 `lb.apk`。
+2. 环境页 →“初始化前缀”，创建 `/data/adb/lb` 并复制 `lb.apk`。
 3. “更新索引”拉取 Termux 官方索引并验签。
 4. 搜索并安装；日志在页面底部。
 5. 模块安装后重启，用 `su -c 'lb shell'` 进入带环境的 shell，或 `su -c 'lb exec <命令>'` 单条执行。

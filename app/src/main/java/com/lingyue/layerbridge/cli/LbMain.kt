@@ -130,7 +130,7 @@ object LbMain {
         println("前缀权限: ${lsLine(LbPaths.BASE)}")
         println("overlay: ${if (overlayMounted()) "已挂载（可被检测）" else "未挂载"}")
         println("module: ${File(LbPaths.MODULE_DIR).isDirectory}")
-        println("apk: ${File("/data/local/lb/lb.apk").isFile}")
+        println("apk: ${File("${LbPaths.BASE}/lb.apk").isFile}")
         return 0
     }
 

@@ -100,8 +100,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val apk = getApplication<Application>().applicationInfo.sourceDir
                 val copy = com.lingyue.layerbridge.core.Shell.exec(
                     "cp ${com.lingyue.layerbridge.core.PathGuard.quote(apk)} " +
-                        "${com.lingyue.layerbridge.core.PathGuard.quote("/data/local/lb/lb.apk")} && " +
-                        "chmod 644 /data/local/lb/lb.apk",
+                        "${com.lingyue.layerbridge.core.PathGuard.quote("${com.lingyue.layerbridge.core.LbPaths.BASE}/lb.apk")} && " +
+                        "chmod 644 ${com.lingyue.layerbridge.core.LbPaths.BASE}/lb.apk",
                 )
                 if (!copy.isSuccess) appendLog("[lb] 复制 lb.apk 失败：${copy.output}")
                 appendLog("[lb] 前缀已初始化：${LbPaths.PREFIX}")

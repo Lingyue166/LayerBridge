@@ -37,8 +37,10 @@ class LinuxInstaller(
         runCatching {
             val dirs = LbPaths.bootstrapDirs.joinToString(" ") { PathGuard.quote(it) }
             val baseMode = if (exposeMode() == ExposeMode.SYSTEM) "755" else "700"
+            val migrate = "if [ ! -d ${PathGuard.quote(LbPaths.BASE)} ] && [ -d /data/local/lb ];" +
+                " then mv /data/local/lb ${PathGuard.quote(LbPaths.BASE)}; fi; "
             val result = Shell.exec(
-                "mkdir -p $dirs && chmod $baseMode ${PathGuard.quote(LbPaths.BASE)}" +
+                migrate + "mkdir -p $dirs && chmod $baseMode ${PathGuard.quote(LbPaths.BASE)}" +
                     " && chmod 755 ${PathGuard.quote(LbPaths.PREFIX)}",
             )
             if (!result.isSuccess) error("初始化前缀失败：${result.output}")

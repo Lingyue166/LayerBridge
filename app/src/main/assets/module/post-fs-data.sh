@@ -1,6 +1,8 @@
 #!/system/bin/sh
 # LayerBridge 模块：准备目录。默认隐藏模式，不触碰系统分区。
-BASE=/data/local/lb
+BASE=/data/adb/lb
+# 旧版本数据迁移（一次性）
+if [ ! -d "$BASE" ] && [ -d /data/local/lb ]; then mv /data/local/lb "$BASE" 2>/dev/null; fi
 MODE=stealth
 [ -f "$BASE/config/expose-system" ] && MODE=system
 
@@ -26,7 +28,7 @@ if [ "$MODE" = "system" ]; then
     [ -f "$BASE/mkshrc.orig" ] || cp /system/etc/mkshrc "$BASE/mkshrc.orig" 2>/dev/null
     if [ -f "$BASE/mkshrc.orig" ]; then
       cp "$BASE/mkshrc.orig" "$BASE/mkshrc.new" 2>/dev/null
-      grep -q "/data/local/lb/env.sh" "$BASE/mkshrc.new" 2>/dev/null || echo '. /data/local/lb/env.sh' >> "$BASE/mkshrc.new"
+      grep -q "$BASE/env.sh" "$BASE/mkshrc.new" 2>/dev/null || echo ". $BASE/env.sh" >> "$BASE/mkshrc.new"
       chmod 644 "$BASE/mkshrc.new" 2>/dev/null
       mount --bind "$BASE/mkshrc.new" /system/etc/mkshrc 2>/dev/null
     fi

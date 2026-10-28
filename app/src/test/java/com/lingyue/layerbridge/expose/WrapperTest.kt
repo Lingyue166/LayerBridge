@@ -3,17 +3,18 @@ package com.lingyue.layerbridge.expose
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import com.lingyue.layerbridge.core.LbPaths
 import org.junit.Test
 
 class WrapperTest {
 
     @Test
     fun generatesWrapperWithEnvironment() {
-        val script = Wrapper.script("bin/hello", extraEnv = mapOf("HELLO_HOME" to "/data/local/lb/usr/share/hello"))
+        val script = Wrapper.script("bin/hello", extraEnv = mapOf("HELLO_HOME" to "${LbPaths.PREFIX}/share/hello"))
         assertTrue(script.startsWith("#!/system/bin/sh"))
-        assertTrue(script.contains("LB_PREFIX='/data/local/lb/usr'"))
+        assertTrue(script.contains("LB_PREFIX='${LbPaths.PREFIX}'"))
         assertTrue(script.contains("export PATH=\"\$LB_PREFIX/bin:\$LB_PREFIX/sbin:\$PATH\""))
-        assertTrue(script.contains("HELLO_HOME='/data/local/lb/usr/share/hello'"))
+        assertTrue(script.contains("HELLO_HOME='${LbPaths.PREFIX}/share/hello'"))
         assertTrue(script.contains("exec \"\$LB_PREFIX/bin/hello\" \"\$@\""))
     }
 

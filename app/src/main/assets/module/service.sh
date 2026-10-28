@@ -1,6 +1,6 @@
 #!/system/bin/sh
 # 开机执行已注册钩子；失败只记录。
-BASE=/data/local/lb
+BASE=/data/adb/lb
 mkdir -p "$BASE/logs"
 for hook in "$BASE"/hooks/*.sh; do
   [ -f "$hook" ] || continue

@@ -198,7 +198,7 @@ private fun EnvironmentScreen(state: UiState, viewModel: MainViewModel, modifier
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp)) {
                 Text("环境", style = MaterialTheme.typography.titleMedium)
-                Text("前缀：/data/local/lb/usr", style = MaterialTheme.typography.bodySmall)
+                Text("前缀：/data/adb/lb/usr", style = MaterialTheme.typography.bodySmall)
                 Text("已安装：${state.installed.size} 个包", style = MaterialTheme.typography.bodySmall)
                 Text(
                     "索引：" + if (state.repoVerified) "已验签" else "未验签",

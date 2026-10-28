@@ -1,7 +1,7 @@
 package com.lingyue.layerbridge.core
 
 object LbPaths {
-    const val BASE = "/data/local/lb"
+    const val BASE = "/data/adb/lb"
     const val PREFIX = "$BASE/usr"
     const val SYSTEM_BIN = "$BASE/system/bin"
     const val OVERLAY_UPPER = "$BASE/system/upper"
