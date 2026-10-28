@@ -2,6 +2,7 @@ package com.lingyue.layerbridge.crypto
 
 import com.google.gson.Gson
 import com.google.gson.JsonParser
+import java.io.File
 import java.security.MessageDigest
 import java.security.PrivateKey
 import java.time.Instant
@@ -25,6 +26,19 @@ object PackageSigner {
 
     fun sha256Hex(bytes: ByteArray): String =
         MessageDigest.getInstance("SHA-256").digest(bytes).toHex()
+
+    fun sha256File(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                digest.update(buffer, 0, count)
+            }
+        }
+        return digest.digest().toHex()
+    }
 
     fun lbpaSigningData(manifestBytes: ByteArray, payloadHashHex: String): ByteArray =
         "LBPA-PKG-V1\n${sha256Hex(manifestBytes)}\n${payloadHashHex.lowercase()}\n"
