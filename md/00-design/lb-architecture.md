@@ -22,7 +22,7 @@
 两种包格式：
 
 - **`.deb`**：Termux 官方、自编译、社区包。
-- **LBPA**：lb 专属；能解析与安装；不是 deb、不是 zip、不是 Magisk/KernelSU 模块。
+- **LBPA**：自有格式。
 
 安装后原生执行：内核直接加载，`/system/bin/linker64` 动态链接；不用 chroot、proot、虚拟机、Termux 沙箱。
 
@@ -375,7 +375,6 @@ lb 接受两种格式，解析后归一到同一个 `PackageMeta` 与安装管�
 
 - 后缀：`.lbpa`、`.lpa`、`.lb`、`.lbp`，字节完全相同；解析以魔数 `LBPA\r\n\x1a\n` 为准。
 - 结构：8 字节魔数 + header + UTF-8 JSON manifest + 压缩 tar payload（+ 可选签名 footer）；payload 内 `control/`（脚本/钩子）与 `files/`（文件树）。
-- 只有 lb 能安装；不是 deb、不是 zip、不是 root 管理器模块。
 - 版本化：`formatVersion`、`minLbVersion`；未知可选字段忽略，未知必选特性拒绝。
 - 完整规范见 [LBPA 格式规范 v1](lbpa-format.md)。
 

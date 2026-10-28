@@ -9,7 +9,7 @@ Android 原生 Linux 包管理器。
 ## 包格式
 
 - `.deb`：Termux 官方、自编译、社区包。
-- LBPA：lb 专属；能解析与安装；不是 deb、不是 zip、不是 Magisk/KernelSU 模块。
+- LBPA：自有格式。
 
 ## 特性
 
