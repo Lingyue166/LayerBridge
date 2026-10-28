@@ -581,7 +581,7 @@ ln -s /data/adb/lb/usr /data/data/com.termux/files/usr
 | `lb expose-root [--remove]` | root shell 软链开关（默认开） |
 | `lb version` | 版本 |
 
-规划、未实现：
+未实现：
 
 | 命令 | 说明 |
 |---|---|
