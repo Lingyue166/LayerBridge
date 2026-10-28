@@ -2,6 +2,7 @@ package com.lingyue.layerbridge.state
 
 import org.junit.Assert.assertEquals
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -73,5 +74,23 @@ class StatusDbTest {
         val line = tmp.root.resolve("installed.tsv").readText().trimEnd('\n')
 
         assertEquals(9, line.split('\t').size)
+    }
+
+    @Test
+    fun transactionTracksInterruptedInstalls() = runBlocking {
+        val db = StatusDb(LocalStateStorage(), tmp.root.absolutePath)
+
+        db.beginTransaction("foo", "2.0")
+        assertEquals("begin", db.readTransaction("foo")?.phase)
+
+        db.recordTransaction(
+            InstallTransaction("foo", "2.0", "merge", listOf("bin/foo"), listOf("foo")),
+        )
+        val transaction = db.readTransaction("foo")
+        assertEquals(listOf("bin/foo"), transaction?.files)
+        assertEquals(listOf("foo"), transaction?.wrappers)
+
+        db.endTransaction("foo")
+        assertNull(db.readTransaction("foo"))
     }
 }

@@ -21,15 +21,15 @@ object PayloadExtractor {
 
     private const val MAX_REWRITE = 1L * 1024 * 1024
 
-    suspend fun extractDeb(deb: DebFile, onLog: (String) -> Unit): List<String> =
-        extract(onLog) { tar, paths ->
+    suspend fun extractDeb(deb: DebFile, targetDir: String, onLog: (String) -> Unit): List<String> =
+        extract(targetDir, onLog) { tar, paths ->
             deb.dataTarInputStream().use { input ->
                 copyEntries(input, tar, paths) { normalize(it) }
             }
         }
 
-    suspend fun extractLbpa(lbpa: LbpaFile, onLog: (String) -> Unit): List<String> =
-        extract(onLog) { tar, paths ->
+    suspend fun extractLbpa(lbpa: LbpaFile, targetDir: String, onLog: (String) -> Unit): List<String> =
+        extract(targetDir, onLog) { tar, paths ->
             payloadTar(lbpa).use { input ->
                 copyEntries(input, tar, paths) { raw ->
                     val name = raw.removePrefix("./")
@@ -59,11 +59,13 @@ object PayloadExtractor {
     }
 
     private suspend fun extract(
+        targetDir: String,
         onLog: (String) -> Unit,
         body: (TarArchiveOutputStream, MutableList<String>) -> Unit,
     ): List<String> {
+        Shell.exec("mkdir -p ${PathGuard.quote(targetDir)}")
         val paths = mutableListOf<String>()
-        val result = Shell.extractTar(LbPaths.PREFIX, onLine = onLog) { output ->
+        val result = Shell.extractTar(targetDir, onLine = onLog) { output ->
             TarArchiveOutputStream(output).use { tar ->
                 tar.setLongFileMode(TarArchiveOutputStream.LONGFILE_POSIX)
                 body(tar, paths)

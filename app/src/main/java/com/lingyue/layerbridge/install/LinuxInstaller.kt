@@ -11,6 +11,7 @@ import com.lingyue.layerbridge.expose.Wrapper
 import com.lingyue.layerbridge.format.LbpaFile
 import com.lingyue.layerbridge.scan.PackageScanner
 import com.lingyue.layerbridge.scan.Severity
+import com.lingyue.layerbridge.state.InstallTransaction
 import com.lingyue.layerbridge.state.InstalledPackage
 import com.lingyue.layerbridge.state.PackageRelations
 import com.lingyue.layerbridge.state.StatusDb
@@ -87,7 +88,10 @@ class LinuxInstaller(
                 val preinst = maintainerScripts.run(name, version, "preinst", preArgs, onLog)
                 if (preinst != null && !preinst.isSuccess) error("preinst 失败")
 
-                val paths = PayloadExtractor.extractDeb(parsed, onLog)
+                statusDb.beginTransaction(name, version)
+                val paths = PayloadExtractor.extractDeb(parsed, stageDir(name), onLog)
+                statusDb.recordTransaction(InstallTransaction(name, version, PHASE_MERGE, paths, wrapperCommands(paths)))
+                mergeStaged(name, paths, onLog)
                 restorePaths(name, keep)
                 if (existing != null) removeObsolete(oldFiles, paths, keep, emptyList(), onLog)
 
@@ -171,7 +175,10 @@ class LinuxInstaller(
                 val preinst = preScript?.let { maintainerScripts.run(name, version, it, preArgs, onLog) }
                 if (preinst != null && !preinst.isSuccess) error("preinst 失败")
 
-                val paths = PayloadExtractor.extractLbpa(parsed, onLog)
+                statusDb.beginTransaction(name, version)
+                val paths = PayloadExtractor.extractLbpa(parsed, stageDir(name), onLog)
+                statusDb.recordTransaction(InstallTransaction(name, version, PHASE_MERGE, paths, wrapperCommands(paths)))
+                mergeStaged(name, paths, onLog)
                 restorePaths(name, keep)
                 if (existing != null) removeObsolete(oldFiles, paths, keep, extraRemove, onLog)
 
@@ -207,14 +214,29 @@ class LinuxInstaller(
         }
     }
 
+    /**
+     * 卸载以「状态库 ∪ 安装事务」为准，因此安装任意阶段崩溃/被杀后仍能清干净：
+     * 事务文件记录解包到一半的文件清单，暂存目录按包名约定清理。
+     */
     suspend fun uninstall(name: String, onLog: (String) -> Unit): Result<Unit> =
         withContext(Dispatchers.IO) {
             runCatching {
                 require(PathGuard.isPackageName(name)) { "非法包名：$name" }
-                val files = statusDb.readFileList(name)
                 val pkg = statusDb.find(name)
-                val version = pkg?.version ?: "unknown"
+                val transaction = statusDb.readTransaction(name)
+                val files = (statusDb.readFileList(name) + transaction?.files.orEmpty())
+                    .distinct()
+                    .filter { PathGuard.isRelativePath(it) }
 
+                if (pkg == null && transaction == null && files.isEmpty()) {
+                    // 安装死在脚本落盘阶段时也会留下目录，一并清掉
+                    maintainerScripts.clear(name)
+                    purgePackageDirs(name)
+                    onLog("[lb] 未安装且无残留：$name")
+                    return@runCatching
+                }
+
+                val version = pkg?.version ?: transaction?.version ?: "unknown"
                 val prerm = maintainerScripts.run(name, version, "prerm", listOf("remove"), onLog)
                 if (prerm != null && !prerm.isSuccess) error("prerm 失败，已取消卸载 $name")
 
@@ -223,17 +245,22 @@ class LinuxInstaller(
                     if (result != null && !result.isSuccess) onLog("[lb] 卸载钩子失败：$hook")
                 }
 
-                removeFiles(files)
-                removeEmptyDirs(files)
+                if (files.isNotEmpty()) {
+                    removeFiles(files)
+                    removeEmptyDirs(files)
+                }
                 removeWrappers(name, files)
-                statusDb.remove(name)
 
                 val postrm = maintainerScripts.run(name, version, "postrm", listOf("remove"), onLog)
                 if (postrm != null && !postrm.isSuccess) onLog("[lb] postrm 失败：$name")
-                maintainerScripts.clear(name)
 
+                // 状态最后删：中途失败可重跑，残留仍可被下一次 uninstall 找到
+                statusDb.remove(name)
+                statusDb.endTransaction(name)
+                maintainerScripts.clear(name)
+                purgePackageDirs(name)
                 writeEnvFile()
-                onLog("[lb] 已卸载 $name")
+                onLog("[lb] 已卸载 $name（清理 ${files.size} 个文件）")
             }
         }
 
@@ -246,7 +273,38 @@ class LinuxInstaller(
         statusDb.writeFileList(pkg.name, paths)
         writeEnvFile()
         writeWrappers(pkg.name, paths)
+        statusDb.endTransaction(pkg.name)
         onLog("[lb] 已安装 ${pkg.name} ${pkg.version}")
+    }
+
+    private fun stageDir(name: String): String = "${LbPaths.CACHE}/stage/$name"
+
+    private fun wrapperCommands(paths: List<String>): List<String> = paths.asSequence()
+        .filter { it.startsWith("bin/") || it.startsWith("sbin/") }
+        .map { it.substringAfterLast('/') }
+        .filter { isExposableCommand(it) }
+        .distinct()
+        .toList()
+
+    /** 暂存目录整体并入前缀；失败时事务文件仍在，卸载据此清理。 */
+    private suspend fun mergeStaged(name: String, paths: List<String>, onLog: (String) -> Unit) {
+        val stage = stageDir(name)
+        if (paths.isEmpty()) {
+            Shell.exec("rm -rf ${PathGuard.quote(stage)}")
+            return
+        }
+        val script = "tar -C ${PathGuard.quote(stage)} -cf - . | tar -C ${PathGuard.quote(LbPaths.PREFIX)} -xf -" +
+            " && rm -rf ${PathGuard.quote(stage)}"
+        val result = Shell.script(script)
+        if (!result.isSuccess) error("写入前缀失败：${result.output}")
+        onLog("[lb] 已写入 ${paths.size} 个条目")
+    }
+
+    /** 清掉按包名约定的缓存/暂存目录，覆盖安装中途被杀留下的半成品。 */
+    private suspend fun purgePackageDirs(name: String) {
+        val dirs = listOf(stageDir(name), "${LbPaths.CACHE}/upgrade/$name")
+            .joinToString(" ") { PathGuard.quote(it) }
+        Shell.exec("rm -rf $dirs")
     }
 
     private fun logUpgrade(existing: InstalledPackage?, version: String, onLog: (String) -> Unit) {
@@ -446,6 +504,7 @@ class LinuxInstaller(
         this?.map { it.trim() }?.filter { it.isNotEmpty() }?.takeIf { it.isNotEmpty() }?.joinToString(", ")
 
     private companion object {
+        const val PHASE_MERGE = "merge"
         private val BLOCKED_COMMANDS = setOf(
             "sh", "bash", "su", "ls", "cat", "cp", "mv", "rm", "mount", "umount",
             "pm", "am", "id", "echo", "test", "mkdir", "chmod", "chown", "tar",

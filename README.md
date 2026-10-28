@@ -15,6 +15,7 @@ Android 原生的 Linux 包管理器：把 bionic/aarch64 的 Linux 包安装到
 - App（Compose）：软件包搜索/安装/卸载、环境页、开发者开关、实时日志。
 - Termux 官方仓库索引：`Release.gpg` OpenPGP 验签 → `Packages` 哈希 → deb 哈希。
 - 依赖解析：Depends / Pre-Depends / Provides / Conflicts / Breaks，拓扑排序；安装前与已装包双向冲突检查（含 Provides 别名）。
+- 安装事务：解包先进暂存目录，完整清单先落 `db/transactions`；任意阶段崩溃/被杀后 `lb remove` 仍可清空全部残留（文件、wrapper、脚本、缓存）。
 - 升级：任意版本 → 任意版本（不要求相邻）。LBPA 用 `upgrade` 块声明 keep/remove/升级脚本，deb 用 `Conffiles` 保护配置；旧文件按清单清理。
 - `.deb` 安装：ar 解析、control 读取、shebang 重定位、流式 tar 写入前缀；维护脚本 preinst/postinst/prerm/postrm 落盘 `db/scripts` 并在安装/卸载期执行。
 - 本地 `.deb` 签名校验（`.sig`）与 LBPA 解析/签名校验（未配置信任根时拒绝）。

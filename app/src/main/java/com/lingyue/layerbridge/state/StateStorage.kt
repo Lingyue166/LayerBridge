@@ -23,7 +23,12 @@ class LocalStateStorage : StateStorage {
     override suspend fun writeText(path: String, content: String, mode: String) {
         val file = File(path)
         file.parentFile?.mkdirs()
-        file.writeText(content, Charsets.UTF_8)
+        val temp = File(path + ".tmp")
+        temp.writeText(content, Charsets.UTF_8)
+        if (!temp.renameTo(file)) {
+            file.writeText(content, Charsets.UTF_8)
+            temp.delete()
+        }
     }
 
     override suspend fun delete(path: String) {
@@ -43,8 +48,12 @@ class RootStateStorage : StateStorage {
     }
 
     override suspend fun writeText(path: String, content: String, mode: String) {
-        val result = Shell.writeFile(path, content, mode)
-        if (!result.isSuccess) error("写入状态失败：$path：${result.output}")
+        // 先写临时文件再原子替换：中途被杀也不会把状态文件截断成半截
+        val temp = "$path.tmp"
+        val written = Shell.writeFile(temp, content, mode)
+        if (!written.isSuccess) error("写入状态失败：$path：${written.output}")
+        val moved = Shell.exec("mv -f ${PathGuard.quote(temp)} ${PathGuard.quote(path)}")
+        if (!moved.isSuccess) error("替换状态失败：$path：${moved.output}")
     }
 
     override suspend fun delete(path: String) {

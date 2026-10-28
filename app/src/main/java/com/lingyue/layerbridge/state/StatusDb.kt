@@ -30,6 +30,15 @@ data class InstalledPackage(
     val removeHooks: List<String> = emptyList(),
 )
 
+/** 安装事务：安装开始即落盘，安装中途崩溃时 `lb uninstall` 仍能据此清理残留。 */
+data class InstallTransaction(
+    val packageName: String,
+    val version: String,
+    val phase: String,
+    val files: List<String> = emptyList(),
+    val wrappers: List<String> = emptyList(),
+)
+
 /**
  * 状态库：`installed.tsv` + `info/<package>.list`，路径固定在前缀数据库目录。
  * 前 9 列固定，第 10 列是包关系/卸载钩子的 JSON，旧文件缺该列时按空值解析。
@@ -75,6 +84,31 @@ class StatusDb(
         storage.readText(listPath(name))?.lines().orEmpty()
             .map { it.trim() }
             .filter { it.isNotEmpty() && PathGuard.isRelativePath(it) }
+
+    suspend fun beginTransaction(name: String, version: String) {
+        require(PathGuard.isPackageName(name)) { "非法包名：$name" }
+        writeTransaction(InstallTransaction(name, version, PHASE_BEGIN))
+    }
+
+    suspend fun recordTransaction(transaction: InstallTransaction) {
+        require(PathGuard.isPackageName(transaction.packageName)) { "非法包名：${transaction.packageName}" }
+        writeTransaction(transaction)
+    }
+
+    suspend fun readTransaction(name: String): InstallTransaction? =
+        storage.readText(transactionPath(name))
+            ?.let { runCatching { gson.fromJson(it, InstallTransaction::class.java) }.getOrNull() }
+            ?.takeIf { it.packageName == name }
+
+    suspend fun endTransaction(name: String) {
+        storage.delete(transactionPath(name))
+    }
+
+    private suspend fun writeTransaction(transaction: InstallTransaction) {
+        storage.writeText(transactionPath(transaction.packageName), gson.toJson(transaction))
+    }
+
+    private fun transactionPath(name: String): String = "$rootDir/transactions/$name.json"
 
     private fun listPath(name: String): String = "$rootDir/info/$name.list"
 
@@ -140,6 +174,7 @@ class StatusDb(
     )
 
     private companion object {
+        const val PHASE_BEGIN = "begin"
         val gson = Gson()
     }
 }
