@@ -2,6 +2,7 @@ package com.lingyue.layerbridge.cli
 
 import com.lingyue.layerbridge.core.EnvFile
 import com.lingyue.layerbridge.core.LbPaths
+import com.lingyue.layerbridge.state.StatusDb
 import java.io.File
 
 /** `lb` 命令入口；由模块的 /system/bin/lb 通过 app_process 调用。 */
@@ -46,17 +47,12 @@ object LbMain {
     }
 
     private fun list() {
-        val file = File("${LbPaths.DB_DIR}/installed.tsv")
-        if (!file.isFile) {
+        val packages = StatusDb(File(LbPaths.DB_DIR)).load()
+        if (packages.isEmpty()) {
             println("尚无已安装包")
             return
         }
-        file.readLines().filter { it.isNotBlank() }.forEach { line ->
-            val parts = line.split('\t')
-            if (parts.size >= 3) {
-                println("${parts[0]}\t${parts[1]}\t${parts.getOrElse(3) { "deb" }}")
-            }
-        }
+        packages.forEach { println("${it.name}\t${it.version}\t${it.format}") }
     }
 
     private fun doctor() {

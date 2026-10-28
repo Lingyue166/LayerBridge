@@ -1,6 +1,7 @@
 package com.lingyue.layerbridge.repo
 
 import com.lingyue.layerbridge.crypto.OpenPgpVerifier
+import com.lingyue.layerbridge.crypto.PackageSigner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayInputStream
@@ -73,7 +74,7 @@ class RepoClient(
                 ?: throw IllegalStateException("Release 中缺少 Packages 哈希")
             val packagesUrl = "${repo.url.trimEnd('/')}/dists/${repo.suite}/$packagesPath"
             val compressed = fetch(packagesUrl, maxBytes = 64L * 1024 * 1024)
-            if (sha256Hex(compressed) != expected) {
+            if (PackageSigner.sha256Hex(compressed) != expected) {
                 throw IllegalStateException("Packages 哈希不匹配")
             }
             val text = decompress(compressed).toString(Charsets.UTF_8)

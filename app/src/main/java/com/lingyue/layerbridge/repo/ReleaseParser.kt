@@ -1,6 +1,5 @@
 package com.lingyue.layerbridge.repo
 
-import java.security.MessageDigest
 import java.time.Duration
 import java.time.Instant
 import java.time.ZonedDateTime
@@ -55,6 +54,3 @@ object ReleaseParser {
         ZonedDateTime.parse(value, DATE_FORMAT).toInstant()
     }.getOrNull()
 }
-
-fun sha256Hex(bytes: ByteArray): String =
-    MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
