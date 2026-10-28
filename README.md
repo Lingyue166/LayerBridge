@@ -1,110 +1,49 @@
 # LayerBridge（lb）
 
-Android 原生的 Linux 包管理器：把 bionic/aarch64 的 Linux 包安装到独立前缀，直接执行；配套 root 模块与 `lb` 命令。
+Android 原生的 Linux 包管理器：把 bionic/aarch64 包安装到独立前缀直接执行，配套 root 模块与 `lb` 命令。
 
-设计文档：
+## 特性
 
-- [架构设计](md/00-design/lb-architecture.md)
-- [LBPA 包格式规范](md/00-design/lbpa-format.md)
-- [ADR 索引](md/60-changes/README.md)
+- 支持 `.deb` 与 LBPA 两种包；签名校验、安装前冲突检查
+- 安装事务：任意阶段中断都能被 `lb remove` 清干净
+- 卸载默认保留数据，`lb remove --force` / `lb purge` 全清
+- 任意版本升降级，不要求版本相邻
+- 默认隐藏：前缀 `700`，命令只对 root 可见，不写 `/system/bin`
 
-## 当前状态（MVP）
-
-已实现：
-
-- App（Compose）：软件包搜索/安装/卸载、环境页、开发者开关、实时日志。
-- Termux 官方仓库索引：`Release.gpg` OpenPGP 验签 → `Packages` 哈希 → deb 哈希。
-- 依赖解析：Depends / Pre-Depends / Provides / Conflicts / Breaks，拓扑排序；安装前与已装包双向冲突检查（含 Provides 别名）。
-- 安装事务：解包先进暂存目录，完整清单先落 `db/transactions`；任意阶段崩溃/被杀后 `lb remove` 仍可清空全部残留（文件、wrapper、脚本、缓存）。
-- 卸载默认保留数据：`data`（deb 为 `Conffiles`）不删，清单记入 `db/data/<pkg>.list`；`lb remove --force` / `lb purge` 才全清。
-- 升级：任意版本 → 任意版本（不要求相邻）。LBPA 用 `upgrade` 块声明 keep/remove/升级脚本，deb 用 `Conffiles` 保护配置；旧文件按清单清理。
-- `.deb` 安装：ar 解析、control 读取、shebang 重定位、流式 tar 写入前缀；维护脚本 preinst/postinst/prerm/postrm 落盘 `db/scripts` 并在安装/卸载期执行。
-- 本地 `.deb` 签名校验（`.sig`）与 LBPA 解析/签名校验（未配置信任根时拒绝）。
-- 恶意检测：脚本规则扫描，命中阻断安装。
-- 默认隐藏（ADR 0007）：前缀 `700`，wrapper 只写 `$BASE/system/bin`，不写 `/system/bin`、不挂 overlay，普通应用无法发现或执行。
-- 可选系统暴露：存在 `$BASE/config/expose-system` 时恢复 overlay + 模块 bin + mkshrc 注入（会在 mount 表留痕）。
-- 状态库单一来源：`/data/adb/lb/db`（App 经 su 读写，CLI 直接读写），见 [ADR 0006](md/60-changes/adr/0006-single-state-source.md)。
-- `lb` 命令：env / list / info / doctor / shell / exec / install / upgrade / remove [--force] / purge / expose-root，`lb cli` 交互模式；输出逐行实时打印。
-- root shell 软链默认开启：安装/卸载时自动把包命令软链到 `/data/adb/ksu/bin`（700），root shell 直接可用、普通应用不可见；`lb expose-root --remove` 关闭，`lb expose-root` 恢复。
-
-尚未完成 / 已知限制：
-
-- App 内“安装模块”按钮未实现；目前需手动把 `app/src/main/assets/module` 安装到 `/data/adb/modules/lb` 或用脚本产物。
-- 信任根导入 / CA 签发 UI 未实现；本地包签名校验需要预置 `files/trust/root.json`。
-- LBPA 打包工具（`lb pack`）与证书签发工具（`lb ca`）未实现。
-- 未在真机验证；root、SELinux 行为以设计文档为准。
-- `/system/bin/lb` 是唯一系统入口，权限 `0700`：普通应用只能 `stat` 到名字，读不到内容、也不能执行；其余命令一律走 `lb exec`。
-- 图形化运行时（X11/Wayland）不在本项目范围内。
-
-## 签名与信任
-
-**LayerBridge 根证书**（随仓库分发，公开信息）：
-
-| 项 | 值 |
-|---|---|
-| 文件 | `certs/lb-root.json` |
-| subject | `LayerBridge Root CA` |
-| keyId | `d26d74ac58281bed76f9e10755920ec918fb2e09d93696bae62c408b4e7167ba` |
-| 有效期 | `2026-10-27T17:26:41Z` → `2036-10-25T17:26:41Z` |
-
-**私钥不入库**，默认保存在 `~/.config/layerbridge/root-key.pem`（0600），只用于 PC 端签名。
+## 安装
 
 ```bash
-# 生成根证书 + 私钥（已执行过；--force 可重签，会替换 certs/lb-root.json）
-scripts/lb-sign.py init "LayerBridge Root CA"
-scripts/lb-sign.py show
-
-# 给任意 deb 生成旁路签名（与 deb 同目录、同名 + .sig）
-scripts/lb-sign.py sign-deb build/testdeb/helloworld_1.0_aarch64.deb
-
-# 设备侧安装信任根
-adb push certs/lb-root.json /sdcard/
-su -c 'mkdir -p /data/adb/lb/trust && cp /sdcard/lb-root.json /data/adb/lb/trust/root.json && chmod 600 /data/adb/lb/trust/root.json'
-su -c 'lb doctor | grep trust'
-```
-
-**Termux 仓库信任**：内置 OpenPGP 公钥 `app/src/main/assets/trust/termux-autobuilds.gpg`，
-指纹 `CC72CF8BA7DBFA0182877D045A897D96E57CF20C`（Termux Releases），
-仓库索引走 `Release.gpg` 验签，包哈希逐级校验；不需要 `root.json`。
-
-## 构建
-
-环境：JDK 17+、Android SDK（platform 36 / build-tools 36）、Gradle 8.11.1。
-
-```bash
-export GRADLE_USER_HOME="$PWD/.gradle-home"
-export ANDROID_USER_HOME="$PWD/.android-home"
-export ANDROID_HOME="$HOME/Android/Sdk"
-
-./gradlew --no-daemon :app:assembleDebug
-./gradlew --no-daemon :app:testDebugUnitTest
-./gradlew --no-daemon :app:lintDebug
-```
-
-产物：`app/build/outputs/apk/debug/app-debug.apk`。
-
-模块包：
-
-```bash
-bash scripts/build-module.sh
-# build/lb-module.zip
+adb install -r app-debug.apk
+adb push lb-module.zip /sdcard/Download/
+su -c 'ksud module install /sdcard/Download/lb-module.zip'   # 或 Magisk 管理器
+# 重启后
+su -c 'lb doctor'
 ```
 
 ## 使用
 
-1. 安装 APK，授予 root（KernelSU/SukiSU 在管理器内授权；Magisk 首次弹窗）。
-2. 环境页 →“初始化前缀”，创建 `/data/adb/lb` 并复制 `lb.apk`。
-3. “更新索引”拉取 Termux 官方索引并验签。
-4. 搜索并安装；日志在页面底部。
-5. 模块安装后重启，用 `su -c 'lb shell'` 进入带环境的 shell，或 `su -c 'lb exec <命令>'` 单条执行。
-6. 也可以直接用 CLI：`su -c 'lb install /sdcard/foo.deb'`、`su -c 'lb remove foo'`、`su -c 'lb cli'`（交互模式）。
+```bash
+su -c 'lb install --allow-unsigned /sdcard/pkg.deb'
+su -c 'lb list'
+su -c 'hello'
+su -c 'lb shell'
+```
 
-## 安全
+## 构建
 
-- 默认只信任：你签发的证书链，或已授权仓库（Termux 官方，OpenPGP 指纹 `CC72CF8BA7DBFA0182877D045A897D96E57CF20C`）。
-- 开发者模式可分别关闭“强制签名”和“自动检测”；坏签名仍拒绝，结构校验仍执行。
-- 静态检测为启发式，存在误报/漏报。
+JDK 17+，Android SDK（platform 36）。
 
-## 技术栈
+```bash
+export GRADLE_USER_HOME="$PWD/.gradle-home"
+export ANDROID_HOME="$HOME/Android/Sdk"
 
-Kotlin 2.4.10 · Compose BOM 2026.03.01 · AGP 8.10.0 · Gradle 8.11.1 · commons-compress · XZ · BouncyCastle（OpenPGP） · Gson。
+./gradlew :app:assembleDebug
+./gradlew :app:testDebugUnitTest
+bash scripts/build-module.sh
+```
+
+## 文档
+
+- [架构设计](md/00-design/lb-architecture.md)
+- [LBPA 包格式](md/00-design/lbpa-format.md)
+- [ADR 索引](md/60-changes/README.md)
