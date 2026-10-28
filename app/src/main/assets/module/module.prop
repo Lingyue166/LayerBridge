@@ -3,4 +3,4 @@ name=LayerBridge
 version=v0.1.0
 versionCode=1
 author=lingyue
-description=Android 原生 Linux 包管理器：lb 命令、系统级暴露、环境注入、开机钩子
+description=lb：Android 原生 Linux 包管理器（deb / LBPA）

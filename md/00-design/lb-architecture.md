@@ -13,22 +13,22 @@
 
 ## 1. 定位
 
-LayerBridge 是 **Android 原生的 Linux 软件包管理方案**，由三部分组成：
+三部分：
 
-1. **App**：Compose 图形界面，负责仓库、搜索、安装、卸载、升级、日志与状态。
-2. **root 模块 `lb`**：Magisk / KernelSU / SukiSU-Ultra / APatch 通用模块，安装一次并重启后提供 `lb` 命令、系统级命令暴露、`mkshrc` 环境注入、开机钩子。
-3. **CLI `lb`**：任意终端里可执行的命令行，与 App 共用同一套核心逻辑。
+- **App**：仓库、搜索、安装、卸载、升级、状态、日志。
+- **root 模块 `lb`**：提供 `lb` 命令与开机钩子；Magisk / KernelSU / SukiSU / APatch。
+- **CLI `lb`**：与 App 共用核心。
 
-它支持两种包格式：
+两种包格式：
 
-- **通用格式 `.deb`**：Termux 官方、自编译、社区包直接安装；
-- **自有格式 LAYERBRIDGEPACKONANDROID**（`.lbpa` / `.lpa` / `.lb` / `.lbp`，同一格式）：只有 lb 能解析安装，带版本化 manifest 与兼容规则，详见 [格式规范](lbpa-format.md)。
+- **`.deb`**：Termux 官方、自编译、社区包。
+- **LBPA**：lb 专属；能解析与安装；不是 deb、不是 zip、不是 Magisk/KernelSU 模块。
 
-两种格式安装到独立前缀后都 **原生执行**：Android 内核直接加载，经 `/system/bin/linker64` 动态链接，**不使用 chroot、proot、虚拟机或 Termux 沙箱**。
+安装后原生执行：内核直接加载，`/system/bin/linker64` 动态链接；不用 chroot、proot、虚拟机、Termux 沙箱。
 
-安装对象既包括命令行工具、CLI 工具，也包括 **图形化工具**。图形化运行时（X11/Wayland/合成器/显示转发）由使用者自行解决，不在 lb 范围内；lb 负责把包、依赖、环境与钩子准备好。
+bionic 约束：Debian/Ubuntu 官方 deb 链接 glibc，ABI 不兼容。
 
-> 为什么必须是 bionic 包：Debian/Ubuntu 官方 `.deb` 链接 glibc，Android 用户态是 bionic，ABI 不兼容，无法原生运行。仓库面向 Termux 官方、自编译、社区编译这类 Android 目标包。
+图形运行时（X11/Wayland）不在范围。
 
 ---
 
