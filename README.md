@@ -47,3 +47,7 @@ bash scripts/build-module.sh
 - [架构设计](md/00-design/lb-architecture.md)
 - [LBPA 包格式](md/00-design/lbpa-format.md)
 - [ADR 索引](md/60-changes/README.md)
+
+## 许可
+
+[GPL-3.0](LICENSE)
