@@ -20,7 +20,7 @@ Android 原生的 Linux 包管理器：把 bionic/aarch64 的 Linux 包安装到
 - 恶意检测：脚本规则扫描，命中阻断安装。
 - 前缀 `/data/local/lb/usr`、`env.sh`、`/system/bin` wrapper（写 overlay upper）。
 - 状态库单一来源：`/data/local/lb/db`（App 经 su 读写，CLI 直接读写），见 [ADR 0006](md/60-changes/adr/0006-single-state-source.md)。
-- `lb` 命令：env / list / doctor / shell / install（本地 .deb/.lbpa）/ remove。
+- `lb` 命令：env / list / info / doctor / shell / install（本地 .deb/.lbpa）/ remove，`lb cli` 交互模式；命令输出逐行实时打印。
 
 尚未完成 / 已知限制：
 
@@ -60,7 +60,7 @@ bash scripts/build-module.sh
 3. “更新索引”拉取 Termux 官方索引并验签。
 4. 搜索并安装；日志在页面底部。
 5. 模块安装后重启，`lb env` / 新开 shell 可获得前缀环境。
-6. 也可以直接用 CLI 安装本地包：`su -c 'lb install /sdcard/foo.deb'`、`su -c 'lb remove foo'`。
+6. 也可以直接用 CLI：`su -c 'lb install /sdcard/foo.deb'`、`su -c 'lb remove foo'`、`su -c 'lb cli'`（交互模式）。
 
 ## 安全
 

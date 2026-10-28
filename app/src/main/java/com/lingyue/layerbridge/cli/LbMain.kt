@@ -6,6 +6,7 @@ import com.lingyue.layerbridge.core.PathGuard
 import com.lingyue.layerbridge.crypto.TrustStore
 import com.lingyue.layerbridge.install.InstallPolicy
 import com.lingyue.layerbridge.install.LinuxInstaller
+import com.lingyue.layerbridge.state.InstalledPackage
 import com.lingyue.layerbridge.state.LocalStateStorage
 import com.lingyue.layerbridge.state.StatusDb
 import kotlinx.coroutines.runBlocking
@@ -17,29 +18,34 @@ object LbMain {
 
     @JvmStatic
     fun main(args: Array<String>) {
-        val code = when (args.firstOrNull()) {
-            null, "help", "--help", "-h" -> help()
-            "version", "--version" -> {
-                println("lb 0.1.0")
-                0
-            }
-            "env" -> {
-                env()
-                0
-            }
-            "list" -> list()
-            "doctor" -> doctor()
-            "shell" -> shell()
-            "install" -> install(args.drop(1))
-            "remove" -> remove(args.drop(1))
-            "update", "upgrade" -> pending(args.first())
-            else -> {
-                System.err.println("未知命令：${args.first()}")
-                help()
-                1
-            }
-        }
+        val code = dispatch(args.toList())
         if (code != 0) exitProcess(code)
+    }
+
+    /** 子命令分发；交互模式复用同一入口，因此不在这里退出进程。 */
+    internal fun dispatch(args: List<String>): Int = when (args.firstOrNull()) {
+        null, "help", "--help", "-h" -> help()
+        "version", "--version" -> {
+            println("lb 0.1.0")
+            0
+        }
+        "env" -> {
+            env()
+            0
+        }
+        "list" -> list()
+        "info" -> info(args.drop(1))
+        "doctor" -> doctor()
+        "shell" -> shell()
+        "cli" -> commandLoop()
+        "install" -> install(args.drop(1))
+        "remove", "uninstall" -> remove(args.drop(1))
+        "update", "upgrade" -> pending(args.first())
+        else -> {
+            System.err.println("未知命令：${args.first()}")
+            help()
+            1
+        }
     }
 
     private fun help(): Int {
@@ -48,17 +54,37 @@ object LbMain {
             lb - LayerBridge package manager
 
             用法：
-              lb env                            打印环境变量
-              lb list                           列出已安装包
-              lb doctor                         自检（root、前缀、数据库、信任根）
-              lb shell                          进入带环境的 shell
-              lb install [选项] <包文件>         安装本地 .deb / .lbpa
-                  --allow-unsigned              允许无签名包（仍需结构校验）
-                  --skip-scan                   跳过维护脚本静态检测
-              lb remove <包名>                  卸载已安装包
+              lb                         同 lb help
+              lb cli                     进入交互模式（子命令与直接调用一致）
+              lb env                     打印环境变量
+              lb list                    列出已安装包
+              lb info <包名>             查看已安装包的元数据与关系
+              lb doctor                  自检（root、前缀、数据库、信任根）
+              lb shell                   进入带环境的 shell
+              lb install [选项] <包文件>  安装本地 .deb / .lbpa（输出实时流式打印）
+                  --allow-unsigned        允许无签名包（仍需结构校验）
+                  --skip-scan             跳过维护脚本静态检测
+              lb remove <包名>           卸载已安装包
+
+            示例：
+              su -c 'lb install /sdcard/hello.deb'
+              su -c 'lb cli'
             """.trimIndent(),
         )
         return 0
+    }
+
+    private fun commandLoop(): Int {
+        println("lb 交互模式：直接输入子命令（install/remove/list/info/doctor/env/shell），exit 退出")
+        while (true) {
+            print("lb> ")
+            System.out.flush()
+            val line = readlnOrNull() ?: return 0
+            val tokens = tokenize(line)
+            if (tokens.isEmpty()) continue
+            if (tokens.first() in EXIT_COMMANDS) return 0
+            dispatch(tokens)
+        }
     }
 
     private fun env() {
@@ -74,6 +100,17 @@ object LbMain {
         }
         packages.forEach { println("${it.name}\t${it.version}\t${it.format}") }
         0
+    }
+
+    private fun info(args: List<String>): Int {
+        if (args.size != 1) return usageError("用法：lb info <包名>")
+        val name = args.single()
+        if (!PathGuard.isPackageName(name)) return fail("非法包名：$name")
+        return runBlocking {
+            val pkg = StatusDb(LocalStateStorage()).find(name) ?: return@runBlocking fail("未安装：$name")
+            print(describe(pkg))
+            0
+        }
     }
 
     private fun doctor(): Int {
@@ -163,7 +200,32 @@ object LbMain {
         return 1
     }
 
+    private val EXIT_COMMANDS = setOf("exit", "quit", ":q")
     private const val LOCAL_REPO = "local"
+}
+
+/** 交互模式的分词：空白分隔，不支持引号（路径含空格请直接调用子命令）。 */
+internal fun tokenize(line: String): List<String> =
+    line.trim().split(WHITESPACE).filter { it.isNotEmpty() }
+
+private val WHITESPACE = Regex("\\s+")
+
+/** `lb info` 的输出；保持 apt show 风格的键值行。 */
+internal fun describe(pkg: InstalledPackage): String = buildString {
+    appendLine("Package: ${pkg.name}")
+    appendLine("Version: ${pkg.version}")
+    appendLine("Architecture: ${pkg.architecture}")
+    appendLine("Format: ${pkg.format}")
+    appendLine("Repo: ${pkg.repo}")
+    appendLine("Installed: ${pkg.installedAt}")
+    appendLine("Signer: ${pkg.signer ?: "-"}")
+    appendLine("Scan: ${pkg.scan}")
+    appendLine("Scripts: ${pkg.scriptsStatus}")
+    pkg.relations.depends?.let { appendLine("Depends: $it") }
+    pkg.relations.provides?.let { appendLine("Provides: $it") }
+    pkg.relations.conflicts?.let { appendLine("Conflicts: $it") }
+    pkg.relations.breaks?.let { appendLine("Breaks: $it") }
+    if (pkg.removeHooks.isNotEmpty()) appendLine("RemoveHooks: ${pkg.removeHooks.joinToString(", ")}")
 }
 
 /** `lb install` 的参数解析；不合法时返回 failure，由调用方决定退出码。 */
