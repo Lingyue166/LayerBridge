@@ -17,11 +17,11 @@
 
 ## 1. 目标
 
-- **专用格式**：仅 lb 解析安装。
-- **兼容**：版本化 manifest；未知可选字段忽略，未知必选特性报错；与 deb 可互转。
-- **流式安装**：manifest 在文件头；payload 流式解压。
-- **可校验**：payload SHA-256 必填；证书链签名默认强制。
-- **可拒绝**：静态检测拦截，阻断并删除缓存包。
+- 只有 lb 解析和安装这个格式。
+- manifest 带版本号：未知可选字段忽略，未知必选特性报错；可与 deb 互转。
+- manifest 在文件头，payload 流式解压。
+- payload 的 SHA-256 必填，证书链签名默认强制校验。
+- 静态检测命中时阻断安装，并删除缓存包。
 
 ## 2. 后缀与识别
 
@@ -32,9 +32,9 @@
 | `.lb` | 简称别名，内容相同 |
 | `.lbp` | 兼容别名，内容相同 |
 
-- 解析时**不依赖后缀**：读取前 8 字节魔数，匹配即视为 LBPA。
+- 解析不依赖后缀：读取前 8 字节魔数，匹配即视为 LBPA。
 - 后缀只用于 UI 过滤、文件关联与仓库索引提示。
-- 其他格式即使改名为 `.lbpa`，也必须因魔数不符而拒绝。
+- 其他格式即使后缀改成 `.lbpa`，也必须因魔数不符而拒绝。
 
 ## 3. 文件布局
 
@@ -165,7 +165,7 @@
 ### 4.7 `env`
 
 ```json
-{ "PYTHONHOME": "/data/local/lb/usr" }
+{ "PYTHONHOME": "/data/adb/lb/usr" }
 ```
 
 - 键：`^[A-Za-z_][A-Za-z0-9_]*$`，值不含 NUL/换行。
@@ -184,7 +184,7 @@
 
 ### 4.9 `upgrade`
 
-LBPA 允许**任意版本升级到任意版本**（含降级、同版本重装），不要求版本相邻，也不依赖中间版本。
+LBPA 允许任意版本之间升级（含降级、同版本重装），不要求版本相邻，也不依赖中间版本。
 
 ```json
 {
@@ -463,12 +463,12 @@ LB-DEB-V1
 
 | 项 | 说明 |
 |---|---|
-| 信任根 | `/data/local/lb/trust/root.json`（root 600/644） |
+| 信任根 | `/data/adb/lb/trust/root.json`（root 600/644） |
 | 初始化 | `lb ca init` 生成根证书与私钥，或 `lb trust import root.json` 导入现有根 |
-| 私钥 | 根私钥建议离线；若在设备生成，存 `/data/local/lb/ca/root.key`，权限 600 |
-| 策略 | `/data/local/lb/config.json`：`require_signature`（默认 true）、`malware_scan`（默认 true） |
-| 受信仓库 | `/data/local/lb/trust/repos/<id>.json`：URL、OpenPGP 指纹、公钥、启停 |
-| 撤销 | `/data/local/lb/trust/revocations.json` + `.sig`（根签名）；按 `serial`/`keyId` 拒绝 |
+| 私钥 | 根私钥建议离线；若在设备生成，存 `/data/adb/lb/ca/root.key`，权限 600 |
+| 策略 | `/data/adb/lb/config.json`：`require_signature`（默认 true）、`malware_scan`（默认 true） |
+| 受信仓库 | `/data/adb/lb/trust/repos/<id>.json`：URL、OpenPGP 指纹、公钥、启停 |
+| 撤销 | `/data/adb/lb/trust/revocations.json` + `.sig`（根签名）；按 `serial`/`keyId` 拒绝 |
 | 根轮换 | v1 不支持在线轮换；新根需重新导入，旧根可继续并存（后续版本） |
 
 安装时的签名判定：
@@ -497,9 +497,9 @@ LB-DEB-V1
 
 ### 9.8 仓库签名（apt / OpenPGP）
 
-apt 仓库不对单个 deb 签名，而是对索引签名。lb 把“受信仓库 + 已签名索引”作为第二条授权路径，因此 **Termux 官方包默认可以直接安装**，无需重签。
+apt 仓库不对单个 deb 签名，而是对索引签名。lb 把“受信仓库 + 已签名索引”作为第二条授权路径，因此 Termux 官方包默认可以直接安装，无需重签。
 
-- 受信仓库条目：`/data/local/lb/trust/repos/<id>.json`
+- 受信仓库条目：`/data/adb/lb/trust/repos/<id>.json`
 
 ```json
 {
@@ -604,7 +604,7 @@ lb config set malware_scan true
     "install": ["control/hooks/10-setup.sh"]
   },
   "env": {
-    "HELLO_HOME": "/data/local/lb/usr/share/hello"
+    "HELLO_HOME": "/data/adb/lb/usr/share/hello"
   },
   "expose": ["bin/hello"],
   "gui": false,

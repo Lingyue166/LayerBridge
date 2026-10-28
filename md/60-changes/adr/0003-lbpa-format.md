@@ -20,7 +20,7 @@
 3. 容器：8 字节魔数 + `u16` 格式版本 + `u16` flags + `u32` manifest 长度 + UTF-8 JSON manifest + 压缩 tar payload。
 4. payload 顶层固定为 `control/`（脚本、钩子）与 `files/`（安装树）；v1 拒绝未知顶层目录。
 5. 兼容规则：`formatVersion` 主版本不兼容即拒绝；同主版本新增可选字段忽略、未知枚举/顶层目录拒绝；`minLbVersion` 拦截旧版 lb。
-6. 完整性：payload SHA-256 必填强校验；签名机制后续由 ADR-0004 定义为强制证书链（本 ADR 原为预留）。
+6. 完整性：payload SHA-256 必填强校验；签名机制后续由 ADR-0004 定义为强制证书链。
 7. 与 `.deb` 双向互操作：`lb pack --from-deb` 无损转换；安装器把两者归一为 `PackageMeta`。
 8. 拒绝 zip、`module.prop`/`customize.sh` 模块包；LBPA 与 deb 均走热安装流程，不重启。
 

@@ -114,17 +114,17 @@ bionic 约束：Debian/Ubuntu 官方 deb 链接 glibc，ABI 不兼容。
 
 ### 4.2 为什么前缀放在 `/data/adb/lb`
 
-- `/data/adb` 的父目录是 `700 root:root`，普通应用**连遍历都不行**，`stat` 也会失败——
+- `/data/adb` 的父目录是 `700 root:root`，普通应用无法遍历，`stat` 也会失败；
   安装的包、状态库、脚本对非 root 完全不可见。
-- 代价：命令必须经 `su -c 'lb shell'` / `lb exec` 使用，普通 shell 不能直接敲；
+- 代价是命令必须经 `su -c 'lb shell'` / `lb exec` 使用，普通 shell 不能直接敲；
   这与「默认隐藏」的决策一致（见 ADR 0007、0008）。
-- 结论：**包文件与状态放 `/data/adb/lb`，模块静态文件放 `/data/adb/modules/lb`。**
+- 因此包文件与状态放 `/data/adb/lb`，模块静态文件放 `/data/adb/modules/lb`。
 
 ### 4.3 为什么包不能是 root 管理器模块
 
 - Magisk/KSU 模块的生效依赖开机挂载，与“安装不允许重启”直接冲突。
 - 模块会修改 `/system`，难以热卸载，且与其他模块冲突。
-- 因此：**lb 只接受通用 `.deb`（可带 lb 元数据），显式拒绝 `module.prop`、`customize.sh`、zip 模块包。**
+- 因此 lb 只接受通用 `.deb`（可带 lb 元数据），显式拒绝 `module.prop`、`customize.sh`、zip 模块包。
 
 ---
 
@@ -287,7 +287,7 @@ exec app_process -Djava.class.path="$APK" /system/bin \
 
 ## 8. 系统级暴露与全局环境
 
-这是 R7 的核心：**让所有 root 应用、任意终端都能按命令名调用已安装包，并拿到正确环境。**
+R7 要求所有 root 应用、任意终端都能按命令名调用已安装包，并拿到正确环境。
 
 ### 8.1 wrapper 生成
 
@@ -337,7 +337,7 @@ mount -t overlay overlay \
 
 - root 应用执行 `su -c "命令"` 时，命令经 `/system/bin` 解析到 wrapper，wrapper 注入 `PATH/LD_LIBRARY_PATH/PREFIX` 后 exec 真实二进制。
 - 子进程继承该环境；因此 `bash`、`python` 等启动后，其子命令也能工作。
-- **不能**修改已运行进程的环境变量；这是内核/进程模型限制。lb 用“命令级 wrapper”等价满足“所有 root 应用可用”。
+- 已运行进程的环境变量无法修改，受内核与进程模型限制。lb 用“命令级 wrapper”等价满足“所有 root 应用可用”。
 - 若 ROM 不允许 overlay 且无元模块，则退化为交互 shell 环境，文档与 UI 明确提示。
 
 ### 8.4 mkshrc 注入
@@ -671,7 +671,7 @@ apt 仓库不对单个 deb 签名，而是对索引签名。lb 接受这条路�
 - 未授权仓库：默认按未签名处理；需 `lb trust repo add` 显式授权（含指纹核对）后才能走路径 B。
 - 两条路径关系：包签名有效 → 直接接受；包未签名但仓库已验证 → 接受；两者都无 → 拒绝。
 
-**与之前版本的差异**：Termux 官方 deb 现在默认可以安装（通过仓库签名），不再需要重签或开发者模式；其他未签名仓库仍需逐包签名或显式授权仓库。
+与之前版本相比，Termux 官方 deb 现在默认可以安装（通过仓库签名），不再需要重签或开发者模式；其他未签名仓库仍需逐包签名或显式授权仓库。
 
 ### 15.2 包安全检查（恶意检测）
 
