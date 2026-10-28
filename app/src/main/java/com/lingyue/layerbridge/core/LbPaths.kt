@@ -11,6 +11,9 @@ object LbPaths {
     const val HOME = "$BASE/home"
     const val TMP = "$PREFIX/tmp"
     const val TRUST_DIR = "$BASE/trust"
+    const val CONFIG_DIR = "$BASE/config"
+    /** 存在即启用系统级暴露（/system/bin overlay + 模块 bin）；默认隐藏。 */
+    const val EXPOSE_FLAG = "$CONFIG_DIR/expose-system"
     const val MODULE_DIR = "/data/adb/modules/lb"
     const val MODULE_SYSTEM_BIN = "$MODULE_DIR/system/bin"
 
@@ -31,6 +34,7 @@ object LbPaths {
         "$DB_DIR/info",
         "$BASE/hooks",
         TRUST_DIR,
+        CONFIG_DIR,
         CACHE,
         HOME,
     )

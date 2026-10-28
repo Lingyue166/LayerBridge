@@ -21,16 +21,18 @@ Android 原生的 Linux 包管理器：把 bionic/aarch64 的 Linux 包安装到
 - `.deb` 安装：ar 解析、control 读取、shebang 重定位、流式 tar 写入前缀；维护脚本 preinst/postinst/prerm/postrm 落盘 `db/scripts` 并在安装/卸载期执行。
 - 本地 `.deb` 签名校验（`.sig`）与 LBPA 解析/签名校验（未配置信任根时拒绝）。
 - 恶意检测：脚本规则扫描，命中阻断安装。
-- 前缀 `/data/local/lb/usr`、`env.sh`、`/system/bin` wrapper（写 overlay upper）。
+- 默认隐藏（ADR 0007）：前缀 `700`，wrapper 只写 `$BASE/system/bin`，不写 `/system/bin`、不挂 overlay，普通应用无法发现或执行。
+- 可选系统暴露：存在 `$BASE/config/expose-system` 时恢复 overlay + 模块 bin + mkshrc 注入（会在 mount 表留痕）。
 - 状态库单一来源：`/data/local/lb/db`（App 经 su 读写，CLI 直接读写），见 [ADR 0006](md/60-changes/adr/0006-single-state-source.md)。
-- `lb` 命令：env / list / info / doctor / shell / install / upgrade / remove [--force] / purge，`lb cli` 交互模式；输出逐行实时打印。
+- `lb` 命令：env / list / info / doctor / shell / exec / install / upgrade / remove [--force] / purge，`lb cli` 交互模式；输出逐行实时打印。
 
 尚未完成 / 已知限制：
 
 - App 内“安装模块”按钮未实现；目前需手动把 `app/src/main/assets/module` 安装到 `/data/adb/modules/lb` 或用脚本产物。
 - 信任根导入 / CA 签发 UI 未实现；本地包签名校验需要预置 `files/trust/root.json`。
 - LBPA 打包工具（`lb pack`）与证书签发工具（`lb ca`）未实现。
-- 未在真机验证；root、overlay、SELinux 行为以设计文档为准。
+- 未在真机验证；root、SELinux 行为以设计文档为准。
+- `/system/bin/lb` 本身对普通用户可见（执行会拒绝非 root）；要完全不留该路径，可从模块中删除 `system/bin/lb`。
 - 图形化运行时（X11/Wayland）不在本项目范围内。
 
 ## 构建
@@ -62,7 +64,7 @@ bash scripts/build-module.sh
 2. 环境页 →“初始化前缀”，创建 `/data/local/lb` 并复制 `lb.apk`。
 3. “更新索引”拉取 Termux 官方索引并验签。
 4. 搜索并安装；日志在页面底部。
-5. 模块安装后重启，`lb env` / 新开 shell 可获得前缀环境。
+5. 模块安装后重启，用 `su -c 'lb shell'` 进入带环境的 shell，或 `su -c 'lb exec <命令>'` 单条执行。
 6. 也可以直接用 CLI：`su -c 'lb install /sdcard/foo.deb'`、`su -c 'lb remove foo'`、`su -c 'lb cli'`（交互模式）。
 
 ## 安全

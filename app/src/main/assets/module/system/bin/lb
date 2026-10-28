@@ -1,4 +1,5 @@
 #!/system/bin/sh
+[ "$(id -u)" = "0" ] || { echo "lb: 需要 root（su -c 'lb ...'）" >&2; exit 1; }
 APK=/data/local/lb/lb.apk
 if [ ! -f "$APK" ]; then
   APK=$(pm path com.lingyue.layerbridge 2>/dev/null | head -1 | cut -d: -f2)

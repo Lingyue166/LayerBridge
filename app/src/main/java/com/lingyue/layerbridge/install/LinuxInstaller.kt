@@ -7,6 +7,8 @@ import com.lingyue.layerbridge.core.Shell
 import com.lingyue.layerbridge.crypto.PackageSigner
 import com.lingyue.layerbridge.crypto.TrustStore
 import com.lingyue.layerbridge.deb.DebFile
+import com.lingyue.layerbridge.expose.ExposeMode
+import com.lingyue.layerbridge.expose.ExposeTargets
 import com.lingyue.layerbridge.expose.Wrapper
 import com.lingyue.layerbridge.format.LbpaFile
 import com.lingyue.layerbridge.scan.PackageScanner
@@ -34,7 +36,11 @@ class LinuxInstaller(
     suspend fun bootstrap(): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             val dirs = LbPaths.bootstrapDirs.joinToString(" ") { PathGuard.quote(it) }
-            val result = Shell.exec("mkdir -p $dirs && chmod 755 ${PathGuard.quote(LbPaths.BASE)} ${PathGuard.quote(LbPaths.PREFIX)}")
+            val baseMode = if (exposeMode() == ExposeMode.SYSTEM) "755" else "700"
+            val result = Shell.exec(
+                "mkdir -p $dirs && chmod $baseMode ${PathGuard.quote(LbPaths.BASE)}" +
+                    " && chmod 755 ${PathGuard.quote(LbPaths.PREFIX)}",
+            )
             if (!result.isSuccess) error("初始化前缀失败：${result.output}")
             writeEnvFile()
         }
@@ -415,6 +421,7 @@ class LinuxInstaller(
     }
 
     private suspend fun writeWrappers(owner: String, paths: List<String>) {
+        val mode = exposeMode()
         val moduleReady = Shell.exec("test -d ${PathGuard.quote(LbPaths.MODULE_DIR)}").isSuccess
         paths.asSequence()
             .filter { it.startsWith("bin/") || it.startsWith("sbin/") }
@@ -422,11 +429,16 @@ class LinuxInstaller(
             .filter { (_, command) -> isExposableCommand(command) }
             .forEach { (path, command) ->
                 val script = Wrapper.script(path, owner = owner)
-                wrapperTargets(command, moduleReady).forEach { target ->
+                ExposeTargets.of(mode, command, moduleReady).forEach { target ->
                     Shell.writeFile(target, script, "755")
                 }
             }
     }
+
+    /** 默认 STEALTH：不写系统分区、不挂 overlay，包只对 root 可见。 */
+    private suspend fun exposeMode(): ExposeMode =
+        if (Shell.exec("test -f ${PathGuard.quote(LbPaths.EXPOSE_FLAG)}").isSuccess) ExposeMode.SYSTEM
+        else ExposeMode.STEALTH
 
     /**
      * 卸载时不能按包名直接删 wrapper：另一个包可能提供同名命令。
@@ -462,6 +474,7 @@ class LinuxInstaller(
     private fun isExposableCommand(command: String): Boolean =
         Wrapper.isExposableName(command) && command !in BLOCKED_COMMANDS
 
+    /** 清理时始终覆盖三处历史落点，避免此前 SYSTEM 模式留下的 wrapper 残留。 */
     private fun wrapperTargets(command: String, moduleReady: Boolean): List<String> = buildList {
         add("${LbPaths.SYSTEM_BIN}/$command")
         add("${LbPaths.OVERLAY_UPPER}/$command")

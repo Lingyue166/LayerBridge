@@ -37,6 +37,7 @@ object LbMain {
         "info" -> info(args.drop(1))
         "doctor" -> doctor()
         "shell" -> shell()
+        "exec" -> exec(args.drop(1))
         "cli" -> commandLoop()
         "install" -> install(args.drop(1), requireInstalled = false)
         "upgrade" -> install(args.drop(1), requireInstalled = true)
@@ -63,6 +64,7 @@ object LbMain {
               lb info <包名>             查看已安装包的元数据与关系
               lb doctor                  自检（root、前缀、数据库、信任根）
               lb shell                   进入带环境的 shell
+              lb exec <命令> [参数...]   以 root 用前缀环境执行一条命令
               lb install [选项] <包文件>  安装本地 .deb / .lbpa（输出实时流式打印）
               lb upgrade [选项] <包文件>  升级/降级已安装包到任意版本（不要求相邻版本）
                   --allow-unsigned        允许无签名包（仍需结构校验）
@@ -124,9 +126,29 @@ object LbMain {
         println("env.sh: ${File(LbPaths.ENV_FILE).isFile}")
         println("db: ${File("${LbPaths.DB_DIR}/installed.tsv").isFile}")
         println("trust: ${File("${LbPaths.TRUST_DIR}/root.json").isFile}")
+        println("expose: ${if (File(LbPaths.EXPOSE_FLAG).isFile) "system（命令暴露到 /system/bin，可被检测）" else "stealth（仅 root 可见）"}")
+        println("前缀权限: ${lsLine(LbPaths.BASE)}")
+        println("overlay: ${if (overlayMounted()) "已挂载（可被检测）" else "未挂载"}")
         println("module: ${File(LbPaths.MODULE_DIR).isDirectory}")
         println("apk: ${File("/data/local/lb/lb.apk").isFile}")
         return 0
+    }
+
+    private fun exec(args: List<String>): Int {
+        if (args.isEmpty()) return usageError("用法：lb exec <命令> [参数...]")
+        if (!isRoot()) return fail("需要 root：请使用 su 运行 lb")
+        val body = "exec " + args.joinToString(" ") { PathGuard.quote(it) }
+        val env = mapOf(
+            "PREFIX" to LbPaths.PREFIX,
+            "PATH" to "${LbPaths.PREFIX}/bin:${LbPaths.PREFIX}/sbin:/system/bin:/system/xbin",
+            "LD_LIBRARY_PATH" to "${LbPaths.PREFIX}/lib",
+            "HOME" to LbPaths.HOME,
+            "TMPDIR" to "${LbPaths.PREFIX}/tmp",
+        )
+        return runBlocking {
+            val result = com.lingyue.layerbridge.core.Shell.script(body, env, onLine = ::println)
+            result.exitCode
+        }
     }
 
     private fun shell(): Int {
@@ -184,6 +206,14 @@ object LbMain {
 
     private fun createInstaller(): LinuxInstaller =
         LinuxInstaller(StatusDb(LocalStateStorage()), TrustStore(File(LbPaths.TRUST_DIR)))
+
+    private fun lsLine(path: String): String = runCatching {
+        ProcessBuilder("ls", "-ld", path).start().inputStream.bufferedReader().readText().trim()
+    }.getOrDefault("-")
+
+    private fun overlayMounted(): Boolean = runCatching {
+        ProcessBuilder("grep", "-q", "${LbPaths.OVERLAY_UPPER}", "/proc/mounts").start().waitFor() == 0
+    }.getOrDefault(false)
 
     private fun isRoot(): Boolean = uid() == "0"
 
