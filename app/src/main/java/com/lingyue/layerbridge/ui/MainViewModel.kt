@@ -10,6 +10,7 @@ import com.lingyue.layerbridge.crypto.TrustStore
 import com.lingyue.layerbridge.install.InstallPolicy
 import com.lingyue.layerbridge.install.LinuxInstaller
 import com.lingyue.layerbridge.repo.DependencyResolver
+import com.lingyue.layerbridge.repo.RelationParser
 import com.lingyue.layerbridge.repo.RepoClient
 import com.lingyue.layerbridge.repo.RepoConfig
 import com.lingyue.layerbridge.repo.RepoPackage
@@ -136,7 +137,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val snapshot = _state.value
             val installedVersions = snapshot.installed.associate { it.name to it.version }
-            val resolver = DependencyResolver(snapshot.packages, installedVersions)
+            val installedProvides = snapshot.installed
+                .flatMap { pkg -> RelationParser.parseProvides(pkg.relations.provides).map { it.name to pkg.version } }
+                .toMap()
+            val resolver = DependencyResolver(snapshot.packages, installedVersions, installedProvides)
             when (val outcome = resolver.resolve(listOf(name))) {
                 is ResolveOutcome.Failure -> {
                     _state.update { it.copy(message = outcome.message) }

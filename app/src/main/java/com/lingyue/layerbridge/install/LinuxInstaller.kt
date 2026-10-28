@@ -12,6 +12,7 @@ import com.lingyue.layerbridge.format.LbpaFile
 import com.lingyue.layerbridge.scan.PackageScanner
 import com.lingyue.layerbridge.scan.Severity
 import com.lingyue.layerbridge.state.InstalledPackage
+import com.lingyue.layerbridge.state.PackageRelations
 import com.lingyue.layerbridge.state.StatusDb
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -54,7 +55,14 @@ class LinuxInstaller(
             val arch = control.architecture ?: "aarch64"
             if (arch != "aarch64" && arch != "all") error("不支持的架构：$arch")
 
+            val relations = PackageRelations(
+                depends = control.depends,
+                provides = control.provides,
+                conflicts = control.conflicts,
+                breaks = control.breaks,
+            )
             val signer = verifyDebSignature(deb, name, repoId, repoVerified, policy)
+            ConflictCheck.find(name, version, relations, statusDb.load())?.let { error(it.message) }
             scanScripts("$name:deb", control.scripts, policy, onLog)
             maintainerScripts.save(name, control.scripts)
 
@@ -77,6 +85,7 @@ class LinuxInstaller(
                     signer = signer,
                     scan = if (policy.malwareScan) "pass" else "skipped",
                     scriptsStatus = scriptsStatus,
+                    relations = relations,
                 ).also { finishInstall(it, paths, onLog) }
             } catch (t: Throwable) {
                 maintainerScripts.clear(name)
@@ -101,7 +110,17 @@ class LinuxInstaller(
             val arch = info.architecture ?: "aarch64"
             if (arch != "aarch64" && arch != "all") error("不支持的架构：$arch")
 
+            val lbpaRelations = parsed.manifest.relations
+            val relations = PackageRelations(
+                depends = lbpaRelations?.depends.raw(),
+                provides = lbpaRelations?.provides.raw(),
+                conflicts = lbpaRelations?.conflicts.raw(),
+                breaks = lbpaRelations?.breaks.raw(),
+            )
+            val removeHooks = parsed.manifest.hooks?.remove.orEmpty()
+
             val signer = verifyLbpaSignature(parsed, repoId, repoVerified, policy)
+            ConflictCheck.find(name, version, relations, statusDb.load())?.let { error(it.message) }
             val controlScripts = PayloadExtractor.readLbpaControl(parsed)
             scanScripts("$name:lbpa", controlScripts, policy, onLog)
             maintainerScripts.save(name, controlScripts)
@@ -135,6 +154,8 @@ class LinuxInstaller(
                     signer = signer,
                     scan = if (policy.malwareScan) "pass" else "skipped",
                     scriptsStatus = scriptsStatus,
+                    relations = relations,
+                    removeHooks = removeHooks,
                 ).also { finishInstall(it, paths, onLog) }
             } catch (t: Throwable) {
                 maintainerScripts.clear(name)
@@ -149,10 +170,16 @@ class LinuxInstaller(
             runCatching {
                 require(PathGuard.isPackageName(name)) { "非法包名：$name" }
                 val files = statusDb.readFileList(name)
-                val version = statusDb.versionOf(name) ?: "unknown"
+                val pkg = statusDb.find(name)
+                val version = pkg?.version ?: "unknown"
 
                 val prerm = maintainerScripts.run(name, version, "prerm", listOf("remove"), onLog)
                 if (prerm != null && !prerm.isSuccess) error("prerm 失败，已取消卸载 $name")
+
+                pkg?.removeHooks.orEmpty().forEach { hook ->
+                    val result = maintainerScripts.run(name, version, hook, emptyList(), onLog)
+                    if (result != null && !result.isSuccess) onLog("[lb] 卸载钩子失败：$hook")
+                }
 
                 removeFiles(files)
                 removeEmptyDirs(files)
@@ -333,6 +360,9 @@ class LinuxInstaller(
             report.findings.forEach { onLog("[scan] ${it.severity} ${it.rule} @ ${it.file}:${it.line}") }
         }
     }
+
+    private fun List<String>?.raw(): String? =
+        this?.map { it.trim() }?.filter { it.isNotEmpty() }?.takeIf { it.isNotEmpty() }?.joinToString(", ")
 
     private companion object {
         private val BLOCKED_COMMANDS = setOf(

@@ -150,4 +150,26 @@ class DependencyTest {
         assertEquals("abcdef", hello.sha256)
         assertEquals("GNU hello\nlong description", hello.description)
     }
+
+    @Test
+    fun installedProvidesSatisfiesDependency() {
+        val resolver = DependencyResolver(
+            available = listOf(pkg("app", depends = "virtual-api")),
+            installed = emptyMap(),
+            installedProvides = mapOf("virtual-api" to "1.2"),
+        )
+
+        assertTrue(resolver.resolve(listOf("app")) is ResolveOutcome.Success)
+    }
+
+    @Test
+    fun conflictsWithInstalledProvidesAreDetected() {
+        val resolver = DependencyResolver(
+            available = listOf(pkg("app", conflicts = "virtual-api")),
+            installed = emptyMap(),
+            installedProvides = mapOf("virtual-api" to "1.0"),
+        )
+
+        assertTrue(resolver.resolve(listOf("app")) is ResolveOutcome.Failure)
+    }
 }

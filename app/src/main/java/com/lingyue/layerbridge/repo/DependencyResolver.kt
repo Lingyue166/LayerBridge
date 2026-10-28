@@ -9,11 +9,12 @@ sealed interface ResolveOutcome {
 
 /**
  * 最小可用的依赖解析器：Depends / Pre-Depends / Provides / Conflicts / Breaks。
- * 已安装包按包名与版本判断满足；暂不记录已安装包的 Provides。
+ * 已安装包按包名与 Provides 别名判断满足。
  */
 class DependencyResolver(
     available: List<RepoPackage>,
     private val installed: Map<String, String>,
+    private val installedProvides: Map<String, String> = emptyMap(),
 ) {
 
     private val byName: Map<String, List<RepoPackage>> = available
@@ -73,8 +74,10 @@ class DependencyResolver(
         }
     }
 
+    private fun installedVersion(name: String): String? = installed[name] ?: installedProvides[name]
+
     private fun satisfiedByInstalled(term: DependencyTerm): Boolean {
-        val version = installed[term.name] ?: return false
+        val version = installedVersion(term.name) ?: return false
         return term.accepts(version)
     }
 
@@ -111,7 +114,7 @@ class DependencyResolver(
             val terms = RelationParser.parse(pkg.conflicts) + RelationParser.parse(pkg.breaks)
             terms.forEach { dependency ->
                 dependency.alternatives.forEach { term ->
-                    val targetVersion = selected[term.name]?.version ?: installed[term.name]
+                    val targetVersion = selected[term.name]?.version ?: installedVersion(term.name)
                     if (targetVersion != null && term.accepts(targetVersion) && term.name != pkg.name) {
                         return "${pkg.name} 与 ${term.name} 冲突：$dependency"
                     }

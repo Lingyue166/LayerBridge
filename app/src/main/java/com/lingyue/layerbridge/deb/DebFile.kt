@@ -107,4 +107,8 @@ data class DebControl(
     val packageName: String? get() = stanza.field("Package")
     val version: String? get() = stanza.field("Version")
     val architecture: String? get() = stanza.field("Architecture")
+    val depends: String? get() = stanza.field("Depends")
+    val provides: String? get() = stanza.field("Provides")
+    val conflicts: String? get() = stanza.field("Conflicts")
+    val breaks: String? get() = stanza.field("Breaks")
 }
