@@ -36,6 +36,37 @@ Android 原生的 Linux 包管理器：把 bionic/aarch64 的 Linux 包安装到
 - `/system/bin/lb` 是唯一系统入口，权限 `0700`：普通应用只能 `stat` 到名字，读不到内容、也不能执行；其余命令一律走 `lb exec`。
 - 图形化运行时（X11/Wayland）不在本项目范围内。
 
+## 签名与信任
+
+**LayerBridge 根证书**（随仓库分发，公开信息）：
+
+| 项 | 值 |
+|---|---|
+| 文件 | `certs/lb-root.json` |
+| subject | `LayerBridge Root CA` |
+| keyId | `d26d74ac58281bed76f9e10755920ec918fb2e09d93696bae62c408b4e7167ba` |
+| 有效期 | `2026-10-27T17:26:41Z` → `2036-10-25T17:26:41Z` |
+
+**私钥不入库**，默认保存在 `~/.config/layerbridge/root-key.pem`（0600），只用于 PC 端签名。
+
+```bash
+# 生成根证书 + 私钥（已执行过；--force 可重签，会替换 certs/lb-root.json）
+scripts/lb-sign.py init "LayerBridge Root CA"
+scripts/lb-sign.py show
+
+# 给任意 deb 生成旁路签名（与 deb 同目录、同名 + .sig）
+scripts/lb-sign.py sign-deb build/testdeb/helloworld_1.0_aarch64.deb
+
+# 设备侧安装信任根
+adb push certs/lb-root.json /sdcard/
+su -c 'mkdir -p /data/adb/lb/trust && cp /sdcard/lb-root.json /data/adb/lb/trust/root.json && chmod 600 /data/adb/lb/trust/root.json'
+su -c 'lb doctor | grep trust'
+```
+
+**Termux 仓库信任**：内置 OpenPGP 公钥 `app/src/main/assets/trust/termux-autobuilds.gpg`，
+指纹 `CC72CF8BA7DBFA0182877D045A897D96E57CF20C`（Termux Releases），
+仓库索引走 `Release.gpg` 验签，包哈希逐级校验；不需要 `root.json`。
+
 ## 构建
 
 环境：JDK 17+、Android SDK（platform 36 / build-tools 36）、Gradle 8.11.1。

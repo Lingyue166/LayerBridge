@@ -9,3 +9,6 @@ local.properties
 captures/
 .externalNativeBuild/
 .cxx/
+
+# 私钥与临时签名材料
+*.pem

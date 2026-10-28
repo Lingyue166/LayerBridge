@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "serial": "0d00c096b421bcbe",
+  "subject": "LayerBridge Root CA",
+  "issuerKeyId": "d26d74ac58281bed76f9e10755920ec918fb2e09d93696bae62c408b4e7167ba",
+  "keyId": "d26d74ac58281bed76f9e10755920ec918fb2e09d93696bae62c408b4e7167ba",
+  "publicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEwFd5n7l6Pb9tfvCqchzUG/bPgmT1Ysdt2BnX9EzOdQ68YI5OoyfR3Wgeg0qByrfHRU0JzDSXPIcAjOkV3Zme5A==",
+  "notBefore": "2026-10-27T17:26:41Z",
+  "notAfter": "2036-10-25T17:26:41Z",
+  "isCA": true,
+  "pathLen": 1,
+  "usages": [
+    "cert-signing",
+    "package-signing"
+  ],
+  "packagePrefixes": [],
+  "signature": "MEQCIEtqoNqC6apkuw2f+GbdxLtE8YsmMSktO89H1CCYw87CAiButrI3xhYI8GuVUtTkJMplh3HysPu2ZLaZMJO/Wfi08A=="
+}
