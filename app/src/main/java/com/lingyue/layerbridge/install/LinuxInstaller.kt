@@ -179,7 +179,7 @@ class LinuxInstaller(
         statusDb.writeFileList(pkg.name, paths)
         syncPrefixDb()
         writeEnvFile()
-        writeWrappers(paths)
+        writeWrappers(pkg.name, paths)
         onLog("[lb] 已安装 ${pkg.name} ${pkg.version}")
     }
 
@@ -206,38 +206,58 @@ class LinuxInstaller(
         Shell.writeFile(LbPaths.ENV_FILE, script, "644")
     }
 
-    private suspend fun writeWrappers(paths: List<String>) {
+    private suspend fun writeWrappers(owner: String, paths: List<String>) {
         val moduleReady = Shell.exec("test -d ${PathGuard.quote(LbPaths.MODULE_DIR)}").isSuccess
         paths.asSequence()
             .filter { it.startsWith("bin/") || it.startsWith("sbin/") }
             .map { it to it.substringAfterLast('/') }
-            .filter { (_, command) -> Wrapper.isExposableName(command) && command !in BLOCKED_COMMANDS }
+            .filter { (_, command) -> isExposableCommand(command) }
             .forEach { (path, command) ->
-                val script = Wrapper.script(path)
-                val targets = mutableListOf(
-                    "${LbPaths.SYSTEM_BIN}/$command",
-                    "${LbPaths.OVERLAY_UPPER}/$command",
-                )
-                if (moduleReady) targets += "${LbPaths.MODULE_SYSTEM_BIN}/$command"
-                targets.forEach { target ->
+                val script = Wrapper.script(path, owner = owner)
+                wrapperTargets(command, moduleReady).forEach { target ->
                     Shell.writeFile(target, script, "755")
                 }
             }
     }
 
+    /**
+     * 卸载时不能按包名直接删 wrapper：另一个包可能提供同名命令。
+     * 以状态库为准重算提供者，有接手者就改写，没有才删除。
+     */
     private suspend fun removeWrappers(name: String, paths: List<String>) {
-        paths.asSequence()
+        val commands = paths.asSequence()
             .filter { it.startsWith("bin/") || it.startsWith("sbin/") }
             .map { it.substringAfterLast('/') }
-            .filter { Wrapper.isExposableName(it) }
-            .forEach { command ->
-                val target = listOf(
-                    "${LbPaths.SYSTEM_BIN}/$command",
-                    "${LbPaths.OVERLAY_UPPER}/$command",
-                    "${LbPaths.MODULE_SYSTEM_BIN}/$command",
-                ).joinToString(" ") { "rm -f -- ${PathGuard.quote(it)}" }
-                Shell.exec(target)
+            .filter { isExposableCommand(it) }
+            .distinct()
+            .toList()
+        if (commands.isEmpty()) return
+
+        val moduleReady = Shell.exec("test -d ${PathGuard.quote(LbPaths.MODULE_DIR)}").isSuccess
+        val filesByPackage = statusDb.load()
+            .filter { it.name != name }
+            .associate { it.name to statusDb.readFileList(it.name) }
+
+        commands.forEach { command ->
+            val targets = wrapperTargets(command, moduleReady)
+            val provider = Wrapper.providers(filesByPackage, command).firstOrNull()
+            if (provider == null) {
+                val remove = targets.joinToString(" ") { "rm -f -- ${PathGuard.quote(it)}" }
+                Shell.exec(remove)
+            } else {
+                val script = Wrapper.script(provider.target, owner = provider.packageName)
+                targets.forEach { target -> Shell.writeFile(target, script, "755") }
             }
+        }
+    }
+
+    private fun isExposableCommand(command: String): Boolean =
+        Wrapper.isExposableName(command) && command !in BLOCKED_COMMANDS
+
+    private fun wrapperTargets(command: String, moduleReady: Boolean): List<String> = buildList {
+        add("${LbPaths.SYSTEM_BIN}/$command")
+        add("${LbPaths.OVERLAY_UPPER}/$command")
+        if (moduleReady) add("${LbPaths.MODULE_SYSTEM_BIN}/$command")
     }
 
     private fun verifyDebSignature(
