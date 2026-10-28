@@ -44,6 +44,18 @@ data class LbpaScripts(
     val postrm: String? = null,
 )
 
+data class LbpaUpgradeScripts(
+    val pre: String? = null,
+    val post: String? = null,
+)
+
+/** 升级策略：任意版本 → 任意版本，keep 保护旧配置，remove 清理旧残留。 */
+data class LbpaUpgrade(
+    val keep: List<String>? = null,
+    val remove: List<String>? = null,
+    val scripts: LbpaUpgradeScripts? = null,
+)
+
 data class LbpaHooks(
     val boot: List<String>? = null,
     val install: List<String>? = null,
@@ -62,6 +74,7 @@ data class LbpaManifest(
     val payload: LbpaPayload? = null,
     val scripts: LbpaScripts? = null,
     val hooks: LbpaHooks? = null,
+    val upgrade: LbpaUpgrade? = null,
     val env: Map<String, String>? = null,
     val expose: List<String>? = null,
     val gui: Boolean? = null,
@@ -245,6 +258,12 @@ class LbpaFile private constructor(
             manifest.hooks?.let { hooks ->
                 (hooks.boot.orEmpty() + hooks.install.orEmpty() + hooks.remove.orEmpty())
                     .forEach { requireControlPath(it) }
+            }
+            manifest.upgrade?.let { upgrade ->
+                (upgrade.keep.orEmpty() + upgrade.remove.orEmpty()).forEach {
+                    if (!PathGuard.isRelativePath(it)) throw LbpaFormatException("非法升级路径：$it")
+                }
+                listOfNotNull(upgrade.scripts?.pre, upgrade.scripts?.post).forEach { requireControlPath(it) }
             }
             manifest.expose.orEmpty().forEach {
                 if (!PathGuard.isRelativePath(it)) throw LbpaFormatException("非法 expose 路径：$it")

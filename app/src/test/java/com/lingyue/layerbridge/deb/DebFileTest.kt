@@ -141,4 +141,25 @@ class DebFileTest {
         out.write(bytes)
         if (bytes.size % 2 != 0) out.write('\n'.code)
     }
+
+    @Test
+    fun parsesConffilesForUpgradeKeep() {
+        val deb = createDeb(
+            control = """
+                Package: hello
+                Version: 1.0
+                Architecture: aarch64
+                Conffiles:
+                 /etc/hello.conf abc123
+                 /etc/other.conf def456
+                 /not/absolute-noop abc
+            """.trimIndent(),
+            scripts = emptyMap(),
+            files = mapOf("usr/bin/hello" to "x"),
+        )
+
+        val files = DebFile(deb).readControl().conffiles
+
+        assertEquals(listOf("etc/hello.conf", "etc/other.conf", "not/absolute-noop"), files)
+    }
 }

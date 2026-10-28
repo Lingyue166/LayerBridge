@@ -4,6 +4,7 @@ import com.google.gson.Gson
 import com.lingyue.layerbridge.crypto.Certificates
 import com.lingyue.layerbridge.crypto.PackageSigner
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayOutputStream
@@ -112,5 +113,43 @@ class LbpaTest {
         file.writeBytes(out.toByteArray())
         file.deleteOnExit()
         return file
+    }
+
+    @Test
+    fun parsesUpgradeBlock() {
+        val payload = "payload".toByteArray()
+        val manifest = LbpaManifest(
+            format = "LAYERBRIDGEPACKONANDROID",
+            formatVersion = 1,
+            packageInfo = LbpaPackageInfo("hello", "2.0", "aarch64"),
+            payload = LbpaPayload("xz", payload.size.toLong(), PackageSigner.sha256Hex(payload)),
+            upgrade = LbpaUpgrade(
+                keep = listOf("etc/hello.conf"),
+                remove = listOf("share/old"),
+                scripts = LbpaUpgradeScripts(pre = "control/upgrade-pre.sh"),
+            ),
+        )
+
+        val parsed = LbpaFile.parse(buildLbpa(manifest, payload, signedBlock = null))
+
+        assertEquals(listOf("etc/hello.conf"), parsed.manifest.upgrade?.keep)
+        assertEquals(listOf("share/old"), parsed.manifest.upgrade?.remove)
+        assertEquals("control/upgrade-pre.sh", parsed.manifest.upgrade?.scripts?.pre)
+    }
+
+    @Test
+    fun rejectsUpgradePathsOutsidePrefix() {
+        val payload = "payload".toByteArray()
+        val manifest = LbpaManifest(
+            format = "LAYERBRIDGEPACKONANDROID",
+            formatVersion = 1,
+            packageInfo = LbpaPackageInfo("hello", "2.0", "aarch64"),
+            payload = LbpaPayload("xz", payload.size.toLong(), PackageSigner.sha256Hex(payload)),
+            upgrade = LbpaUpgrade(keep = listOf("../etc/passwd")),
+        )
+
+        assertThrows(LbpaFormatException::class.java) {
+            LbpaFile.parse(buildLbpa(manifest, payload, signedBlock = null))
+        }
     }
 }

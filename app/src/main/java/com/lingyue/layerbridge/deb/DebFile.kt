@@ -1,5 +1,6 @@
 package com.lingyue.layerbridge.deb
 
+import com.lingyue.layerbridge.core.PathGuard
 import com.lingyue.layerbridge.repo.ControlParser
 import com.lingyue.layerbridge.repo.Stanza
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
@@ -111,4 +112,13 @@ data class DebControl(
     val provides: String? get() = stanza.field("Provides")
     val conflicts: String? get() = stanza.field("Conflicts")
     val breaks: String? get() = stanza.field("Breaks")
+
+    /** 升级时需要保留的配置文件（Conffiles 中的绝对路径转为前缀内相对路径）。 */
+    val conffiles: List<String>
+        get() = stanza.field("Conffiles").orEmpty().lines()
+            .map { it.trim().substringBefore(' ').trim() }
+            .filter { it.startsWith("/") }
+            .map { it.removePrefix("/") }
+            .filter { PathGuard.isRelativePath(it) }
+            .distinct()
 }

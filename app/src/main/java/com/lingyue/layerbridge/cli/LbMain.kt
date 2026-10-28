@@ -38,9 +38,10 @@ object LbMain {
         "doctor" -> doctor()
         "shell" -> shell()
         "cli" -> commandLoop()
-        "install" -> install(args.drop(1))
+        "install" -> install(args.drop(1), requireInstalled = false)
+        "upgrade" -> install(args.drop(1), requireInstalled = true)
         "remove", "uninstall" -> remove(args.drop(1))
-        "update", "upgrade" -> pending(args.first())
+        "update" -> pending(args.first())
         else -> {
             System.err.println("未知命令：${args.first()}")
             help()
@@ -62,6 +63,7 @@ object LbMain {
               lb doctor                  自检（root、前缀、数据库、信任根）
               lb shell                   进入带环境的 shell
               lb install [选项] <包文件>  安装本地 .deb / .lbpa（输出实时流式打印）
+              lb upgrade [选项] <包文件>  升级/降级已安装包到任意版本（不要求相邻版本）
                   --allow-unsigned        允许无签名包（仍需结构校验）
                   --skip-scan             跳过维护脚本静态检测
               lb remove <包名>           卸载已安装包
@@ -137,7 +139,7 @@ object LbMain {
         return shell.waitFor()
     }
 
-    private fun install(args: List<String>): Int {
+    private fun install(args: List<String>, requireInstalled: Boolean): Int {
         val options = parseInstall(args).getOrElse { return usageError(it.message.orEmpty()) }
         if (!isRoot()) return fail("需要 root：请使用 su 运行 lb")
         val file = File(options.path)
@@ -150,9 +152,9 @@ object LbMain {
                 .onFailure { return@runBlocking fail("初始化前缀失败：${it.message}") }
             val result = when {
                 file.name.endsWith(".deb", ignoreCase = true) ->
-                    installer.installDeb(file, LOCAL_REPO, false, policy) { println(it) }
+                    installer.installDeb(file, LOCAL_REPO, false, policy, requireInstalled) { println(it) }
                 file.name.endsWith(".lbpa", ignoreCase = true) ->
-                    installer.installLbpa(file, LOCAL_REPO, false, policy) { println(it) }
+                    installer.installLbpa(file, LOCAL_REPO, false, policy, requireInstalled) { println(it) }
                 else -> return@runBlocking fail("无法识别包类型（需要 .deb 或 .lbpa）：${file.name}")
             }
             result.fold(

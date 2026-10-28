@@ -44,6 +44,7 @@ class LinuxInstaller(
         repoId: String,
         repoVerified: Boolean,
         policy: InstallPolicy,
+        requireInstalled: Boolean = false,
         onLog: (String) -> Unit,
     ): Result<InstalledPackage> = withContext(Dispatchers.IO) {
         runCatching {
@@ -64,15 +65,35 @@ class LinuxInstaller(
             val signer = verifyDebSignature(deb, name, repoId, repoVerified, policy)
             ConflictCheck.find(name, version, relations, statusDb.load())?.let { error(it.message) }
             scanScripts("$name:deb", control.scripts, policy, onLog)
+
+            val existing = statusDb.find(name)
+            if (requireInstalled && existing == null) error("未安装 $name，请使用 install")
+            logUpgrade(existing, version, onLog)
+
+            val oldFiles = statusDb.readFileList(name)
+            val keep = existing?.let { control.conffiles }.orEmpty()
+
+            // 旧包的 prerm 必须在覆盖 db/scripts 之前执行
+            existing?.let { old ->
+                val prerm = maintainerScripts.run(name, old.version, "prerm", listOf("upgrade", version), onLog)
+                if (prerm != null && !prerm.isSuccess) error("prerm upgrade 失败")
+            }
+            backupPaths(name, keep)
+            maintainerScripts.clear(name)
             maintainerScripts.save(name, control.scripts)
 
             val pkg = try {
-                val preinst = maintainerScripts.run(name, version, "preinst", listOf("install"), onLog)
+                val preArgs = if (existing != null) listOf("upgrade", existing.version) else listOf("install")
+                val preinst = maintainerScripts.run(name, version, "preinst", preArgs, onLog)
                 if (preinst != null && !preinst.isSuccess) error("preinst 失败")
 
                 val paths = PayloadExtractor.extractDeb(parsed, onLog)
+                restorePaths(name, keep)
+                if (existing != null) removeObsolete(oldFiles, paths, keep, emptyList(), onLog)
+
                 var scriptsStatus = "ok"
-                val postinst = maintainerScripts.run(name, version, "postinst", listOf("configure", version), onLog)
+                val postArgs = if (existing != null) listOf("configure", existing.version) else listOf("configure", version)
+                val postinst = maintainerScripts.run(name, version, "postinst", postArgs, onLog)
                 if (postinst != null && !postinst.isSuccess) scriptsStatus = "postinst-failed"
 
                 InstalledPackage(
@@ -100,6 +121,7 @@ class LinuxInstaller(
         repoId: String,
         repoVerified: Boolean,
         policy: InstallPolicy,
+        requireInstalled: Boolean = false,
         onLog: (String) -> Unit,
     ): Result<InstalledPackage> = withContext(Dispatchers.IO) {
         runCatching {
@@ -123,20 +145,40 @@ class LinuxInstaller(
             ConflictCheck.find(name, version, relations, statusDb.load())?.let { error(it.message) }
             val controlScripts = PayloadExtractor.readLbpaControl(parsed)
             scanScripts("$name:lbpa", controlScripts, policy, onLog)
+
+            val upgrade = parsed.manifest.upgrade
+            val existing = statusDb.find(name)
+            if (requireInstalled && existing == null) error("未安装 $name，请使用 install")
+            logUpgrade(existing, version, onLog)
+
+            val oldFiles = statusDb.readFileList(name)
+            val keep = if (existing != null) upgrade?.keep.orEmpty() else emptyList()
+            val extraRemove = upgrade?.remove.orEmpty()
+
+            // 旧包的 prerm 必须在覆盖 db/scripts 之前执行
+            existing?.let { old ->
+                val prerm = maintainerScripts.run(name, old.version, "prerm", listOf("upgrade", version), onLog)
+                if (prerm != null && !prerm.isSuccess) error("prerm upgrade 失败")
+            }
+            backupPaths(name, keep)
+            maintainerScripts.clear(name)
             maintainerScripts.save(name, controlScripts)
 
             val pkg = try {
                 val scripts = parsed.manifest.scripts
-                val preinst = scripts?.preinst?.let {
-                    maintainerScripts.run(name, version, it, listOf("install"), onLog)
-                }
+                val preArgs = if (existing != null) listOf(existing.version) else listOf("install")
+                val preScript = if (existing != null) upgrade?.scripts?.pre ?: scripts?.preinst else scripts?.preinst
+                val preinst = preScript?.let { maintainerScripts.run(name, version, it, preArgs, onLog) }
                 if (preinst != null && !preinst.isSuccess) error("preinst 失败")
 
                 val paths = PayloadExtractor.extractLbpa(parsed, onLog)
+                restorePaths(name, keep)
+                if (existing != null) removeObsolete(oldFiles, paths, keep, extraRemove, onLog)
+
                 var scriptsStatus = "ok"
-                val postinst = scripts?.postinst?.let {
-                    maintainerScripts.run(name, version, it, listOf("configure", version), onLog)
-                }
+                val postArgs = if (existing != null) listOf(existing.version) else listOf("configure", version)
+                val postScript = if (existing != null) upgrade?.scripts?.post ?: scripts?.postinst else scripts?.postinst
+                val postinst = postScript?.let { maintainerScripts.run(name, version, it, postArgs, onLog) }
                 if (postinst != null && !postinst.isSuccess) scriptsStatus = "postinst-failed"
 
                 parsed.manifest.hooks?.install.orEmpty().forEach { hook ->
@@ -205,6 +247,59 @@ class LinuxInstaller(
         writeEnvFile()
         writeWrappers(pkg.name, paths)
         onLog("[lb] 已安装 ${pkg.name} ${pkg.version}")
+    }
+
+    private fun logUpgrade(existing: InstalledPackage?, version: String, onLog: (String) -> Unit) {
+        if (existing == null) return
+        when (UpgradeKind.of(existing.version, version)) {
+            UpgradeKind.UPGRADE -> onLog("[lb] 升级：${existing.version} → $version")
+            UpgradeKind.DOWNGRADE -> onLog("[lb] 降级：${existing.version} → $version")
+            UpgradeKind.REINSTALL -> onLog("[lb] 同版本重装：$version")
+            UpgradeKind.FRESH -> Unit
+        }
+    }
+
+    /** 升级前把旧配置（deb 的 Conffiles / LBPA 的 upgrade.keep）备份到缓存目录。 */
+    private suspend fun backupPaths(name: String, paths: List<String>) {
+        if (paths.isEmpty()) return
+        val dir = "${LbPaths.CACHE}/upgrade/$name"
+        val script = buildString {
+            appendLine("rm -rf ${PathGuard.quote(dir)}")
+            paths.forEach { path ->
+                val parent = path.substringBeforeLast('/', "")
+                if (parent.isNotEmpty()) appendLine("mkdir -p ${PathGuard.quote("$dir/$parent")}")
+                appendLine("cp -a ${PathGuard.quote("${LbPaths.PREFIX}/$path")} ${PathGuard.quote("$dir/$path")} 2>/dev/null || true")
+            }
+        }
+        Shell.script(script)
+    }
+
+    private suspend fun restorePaths(name: String, paths: List<String>) {
+        if (paths.isEmpty()) return
+        val dir = "${LbPaths.CACHE}/upgrade/$name"
+        val script = buildString {
+            paths.forEach { path ->
+                val parent = path.substringBeforeLast('/', "")
+                if (parent.isNotEmpty()) appendLine("mkdir -p ${PathGuard.quote("${LbPaths.PREFIX}/$parent")}")
+                appendLine("cp -a ${PathGuard.quote("$dir/$path")} ${PathGuard.quote("${LbPaths.PREFIX}/$path")} 2>/dev/null || true")
+            }
+            appendLine("rm -rf ${PathGuard.quote(dir)}")
+        }
+        Shell.script(script)
+    }
+
+    private suspend fun removeObsolete(
+        oldFiles: List<String>,
+        newFiles: List<String>,
+        keep: List<String>,
+        extraRemove: List<String>,
+        onLog: (String) -> Unit,
+    ) {
+        val obsolete = UpgradePlan.obsolete(oldFiles, newFiles, keep, extraRemove)
+        if (obsolete.isEmpty()) return
+        onLog("[lb] 清理旧文件：${obsolete.size} 个")
+        removeFiles(obsolete)
+        removeEmptyDirs(obsolete)
     }
 
     private suspend fun removeFiles(files: List<String>) {

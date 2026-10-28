@@ -76,6 +76,7 @@
 | `payload` | object | 是 | 见 4.4 |
 | `scripts` | object | 否 | 维护脚本路径，见 4.5 |
 | `hooks` | object | 否 | 开机/事件钩子，见 4.6 |
+| `upgrade` | object | 否 | 升级策略，见 4.9 |
 | `env` | object | 否 | 安装后追加的环境变量 |
 | `expose` | array | 否 | 需要暴露到 `/system/bin` 的命令路径 |
 | `gui` | bool | 否 | 图形工具提示，仅用于 UI |
@@ -183,6 +184,32 @@
 - 缺省时：`files/bin/*` 与 `files/sbin/*` 中带执行位的文件自动暴露。
 - 与 `/system/bin` 同名命令默认跳过；需用户显式 `--force`。
 
+### 4.9 `upgrade`
+
+LBPA 允许**任意版本升级到任意版本**（含降级、同版本重装），不要求版本相邻，也不依赖中间版本。
+
+```json
+{
+  "keep": ["etc/hello.conf"],
+  "remove": ["share/hello/obsolete.txt"],
+  "scripts": {
+    "pre": "control/upgrade-pre.sh",
+    "post": "control/upgrade-post.sh"
+  }
+}
+```
+
+| 字段 | 类型 | 必须 | 说明 |
+|---|---|---|---|
+| `keep` | array | 否 | 升级前备份、解包后恢复的路径；旧内容优先，防止新版覆盖配置 |
+| `remove` | array | 否 | 升级时额外删除的旧路径 |
+| `scripts.pre` | string | 否 | 解包前执行，参数 `<old-version>`；缺失时回退 `scripts.preinst` |
+| `scripts.post` | string | 否 | 解包后执行，参数 `<old-version>`；缺失时回退 `scripts.postinst` |
+
+- 路径相对前缀、不得含 `..`；脚本路径必须在 `control/` 下。
+- 未声明 `keep` 时，旧包中已不存在于新包的文件按文件清单自动清理。
+- 旧包的 `prerm` 在新包脚本落盘之前以 `prerm upgrade <new-version>` 执行，失败则中止升级。
+
 ## 5. Payload
 
 ### 5.1 布局
@@ -235,6 +262,17 @@ files/…       # 安装进前缀的文件树
 2. 按文件清单删除前缀内文件。
 3. 删除 wrapper、清理 `env.sh` 段、删除钩子。
 4. 执行 `scripts.postrm`。
+
+升级（任意版本 → 任意版本）：
+
+1. 解析新包，取旧状态快照（旧文件清单、旧脚本、旧版本）。
+2. 执行旧包 `scripts.prerm upgrade <new-version>`；失败中止，旧包保持原样。
+3. 按 `upgrade.keep` 备份旧配置。
+4. 落盘新包脚本；执行 `upgrade.scripts.pre`（缺失时 `scripts.preinst`），参数 `<old-version>`。
+5. 流式解包覆盖前缀。
+6. 恢复 `keep` 路径；删除（旧清单 − 新清单 − keep）与 `upgrade.remove` 中的路径。
+7. 执行 `upgrade.scripts.post`（缺失时 `scripts.postinst`）、`hooks.install`。
+8. 写状态库并重建 wrapper。
 
 全程不重启。
 
