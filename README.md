@@ -32,7 +32,7 @@ Android 原生的 Linux 包管理器：把 bionic/aarch64 的 Linux 包安装到
 - 信任根导入 / CA 签发 UI 未实现；本地包签名校验需要预置 `files/trust/root.json`。
 - LBPA 打包工具（`lb pack`）与证书签发工具（`lb ca`）未实现。
 - 未在真机验证；root、SELinux 行为以设计文档为准。
-- `/system/bin/lb` 本身对普通用户可见（执行会拒绝非 root）；要完全不留该路径，可从模块中删除 `system/bin/lb`。
+- `/system/bin/lb` 是唯一系统入口，权限 `0700`：普通应用只能 `stat` 到名字，读不到内容、也不能执行；其余命令一律走 `lb exec`。
 - 图形化运行时（X11/Wayland）不在本项目范围内。
 
 ## 构建

@@ -131,6 +131,7 @@ object LbMain {
         println("overlay: ${if (overlayMounted()) "已挂载（可被检测）" else "未挂载"}")
         println("module: ${File(LbPaths.MODULE_DIR).isDirectory}")
         println("apk: ${File("${LbPaths.BASE}/lb.apk").isFile}")
+        println("entry: ${lsLine("/system/bin/lb")}")
         return 0
     }
 
