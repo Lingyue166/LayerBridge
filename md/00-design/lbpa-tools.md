@@ -25,6 +25,9 @@
 
 ## 11. 工具链
 
+PC 端已提供 `scripts/lb-pack.py`（from-deb / from-dir）与 `scripts/lb-sign.py`（init / sign-deb）。
+命令行 `lb pack` 未实现。
+
 ```sh
 # 从目录打包
 lb pack ./rootfs \

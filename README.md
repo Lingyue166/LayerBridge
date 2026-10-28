@@ -51,6 +51,19 @@ export ANDROID_HOME="$HOME/Android/Sdk"
 bash scripts/build-module.sh
 ```
 
+## 打包
+
+```bash
+# deb -> LBPA（保留脚本、Conffiles、依赖关系）
+scripts/lb-pack.py from-deb pkg.deb -o pkg.lbpa
+
+# 前缀目录 -> LBPA
+scripts/lb-pack.py from-dir ./root --name foo --version 1.0 -o foo.lbpa
+
+# 不签名
+scripts/lb-pack.py from-dir ./root --name foo --version 1.0 -o foo.lbpa --no-sign
+```
+
 ## 许可
 
 [GPL-3.0](LICENSE)
