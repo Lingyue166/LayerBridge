@@ -24,7 +24,8 @@ Android 原生的 Linux 包管理器：把 bionic/aarch64 的 Linux 包安装到
 - 默认隐藏（ADR 0007）：前缀 `700`，wrapper 只写 `$BASE/system/bin`，不写 `/system/bin`、不挂 overlay，普通应用无法发现或执行。
 - 可选系统暴露：存在 `$BASE/config/expose-system` 时恢复 overlay + 模块 bin + mkshrc 注入（会在 mount 表留痕）。
 - 状态库单一来源：`/data/adb/lb/db`（App 经 su 读写，CLI 直接读写），见 [ADR 0006](md/60-changes/adr/0006-single-state-source.md)。
-- `lb` 命令：env / list / info / doctor / shell / exec / install / upgrade / remove [--force] / purge，`lb cli` 交互模式；输出逐行实时打印。
+- `lb` 命令：env / list / info / doctor / shell / exec / install / upgrade / remove [--force] / purge / expose-root，`lb cli` 交互模式；输出逐行实时打印。
+- `lb expose-root`：把包命令软链到 root 管理器的 bin 目录（`/data/adb/ksu/bin` 等，700），root shell 直接可用，普通应用不可见；安装/卸载时自动维护，`--remove` 关闭。
 
 尚未完成 / 已知限制：
 

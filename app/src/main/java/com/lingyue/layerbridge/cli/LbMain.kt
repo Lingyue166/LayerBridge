@@ -42,6 +42,7 @@ object LbMain {
         "install" -> install(args.drop(1), requireInstalled = false)
         "upgrade" -> install(args.drop(1), requireInstalled = true)
         "remove", "uninstall" -> remove(args.drop(1), forceByCommand = false)
+        "expose-root" -> exposeRoot(args.drop(1))
         "purge" -> remove(args.drop(1), forceByCommand = true)
         "update" -> pending(args.first())
         else -> {
@@ -69,7 +70,7 @@ object LbMain {
               lb upgrade [选项] <包文件>  升级/降级已安装包到任意版本（不要求相邻版本）
                   --allow-unsigned        允许无签名包（仍需结构校验）
                   --skip-scan             跳过维护脚本静态检测
-              lb remove [--force] <包名> 卸载；默认保留数据/配置
+              lb expose-root [--remove] 把包命令软链到 root shell 的 PATH（700 目录，非 root 不可见）
                   --force / -f            连同数据、残留一起清除（同 lb purge）
               lb purge <包名>            强制卸载（= lb remove --force）
 
@@ -201,6 +202,18 @@ object LbMain {
             createInstaller().uninstall(name, force) { println(it) }.fold(
                 onSuccess = { println("[lb] 已卸载 $name"); 0 },
                 onFailure = { println("[lb] 卸载失败：${it.message}"); 1 },
+            )
+        }
+    }
+
+    private fun exposeRoot(args: List<String>): Int {
+        if (!isRoot()) return fail("需要 root：请使用 su 运行 lb")
+        val remove = args.firstOrNull() == "--remove"
+        if (args.isNotEmpty() && !remove) return usageError("用法：lb expose-root [--remove]")
+        return runBlocking {
+            createInstaller().setRootExposure(!remove) { println(it) }.fold(
+                onSuccess = { 0 },
+                onFailure = { fail("操作失败：${it.message}") },
             )
         }
     }

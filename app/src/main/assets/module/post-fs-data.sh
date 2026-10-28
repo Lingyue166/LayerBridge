@@ -1,6 +1,11 @@
 #!/system/bin/sh
 # LayerBridge 模块：准备目录。默认隐藏模式，不触碰系统分区。
+MODDIR=${0%/*}
 BASE=/data/adb/lb
+
+# 安装器会把 zip 里的模式归一成 0755，这里恢复入口的 0700
+chmod 700 "$MODDIR/system/bin/lb" 2>/dev/null
+chmod 755 "$MODDIR/post-fs-data.sh" "$MODDIR/service.sh" 2>/dev/null
 # 旧版本数据迁移（一次性）
 if [ ! -d "$BASE" ] && [ -d /data/local/lb ]; then mv /data/local/lb "$BASE" 2>/dev/null; fi
 MODE=stealth

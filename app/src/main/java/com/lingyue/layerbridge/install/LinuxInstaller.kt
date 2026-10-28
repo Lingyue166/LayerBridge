@@ -7,6 +7,7 @@ import com.lingyue.layerbridge.core.Shell
 import com.lingyue.layerbridge.crypto.PackageSigner
 import com.lingyue.layerbridge.crypto.TrustStore
 import com.lingyue.layerbridge.deb.DebFile
+import com.lingyue.layerbridge.expose.ExposeCommands
 import com.lingyue.layerbridge.expose.ExposeMode
 import com.lingyue.layerbridge.expose.ExposeTargets
 import com.lingyue.layerbridge.expose.Wrapper
@@ -290,6 +291,7 @@ class LinuxInstaller(
                 }
                 maintainerScripts.clear(name)
                 purgePackageDirs(name)
+                syncRootLinks()
                 writeEnvFile()
                 onLog("[lb] 已卸载 $name（清理 ${removal.size} 个文件）")
             }
@@ -298,6 +300,23 @@ class LinuxInstaller(
     suspend fun refreshEnvironment(): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching { writeEnvFile() }
     }
+
+    /**
+     * root shell 直接可用：把包命令软链到 root 管理器的 bin 目录（/data/adb/ksu/bin 等）。
+     * 目录 700，普通应用不可见；不产生 /system 改动。
+     */
+    suspend fun setRootExposure(enabled: Boolean, onLog: (String) -> Unit): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                if (enabled) {
+                    Shell.writeFile(LbPaths.EXPOSE_ROOT_FLAG, "enabled\n", "600")
+                } else {
+                    Shell.exec("rm -f ${PathGuard.quote(LbPaths.EXPOSE_ROOT_FLAG)}")
+                }
+                syncRootLinks()
+                onLog(if (enabled) "[lb] 已启用 root shell 软链" else "[lb] 已移除 root shell 软链")
+            }
+        }
 
     private suspend fun finishInstall(
         pkg: InstalledPackage,
@@ -310,8 +329,36 @@ class LinuxInstaller(
         statusDb.writePreservedData(pkg.name, dataFiles)
         writeEnvFile()
         writeWrappers(pkg.name, paths)
+        syncRootLinks()
         statusDb.endTransaction(pkg.name)
         onLog("[lb] 已安装 ${pkg.name} ${pkg.version}")
+    }
+
+    /** 重建 root 管理器 bin 目录里的软链：只动指向我们 wrapper 的链接，从不覆盖已有命令。 */
+    private suspend fun syncRootLinks() {
+        val dirs = ROOT_BIN_DIRS.filter { Shell.exec("test -d ${PathGuard.quote(it)}").isSuccess }
+        if (dirs.isEmpty()) return
+
+        dirs.forEach { dir ->
+            Shell.exec(
+                "find ${PathGuard.quote(dir)} -maxdepth 1 -type l -lname ${PathGuard.quote("${LbPaths.SYSTEM_BIN}/*")} -delete",
+            )
+        }
+        if (Shell.exec("test -f ${PathGuard.quote(LbPaths.EXPOSE_ROOT_FLAG)}").isSuccess.not()) return
+
+        val files = statusDb.load().flatMap { statusDb.readFileList(it.name) }
+        ExposeCommands.of(files, BLOCKED_COMMANDS).forEach { command ->
+            dirs.forEach { dir ->
+                val exists = Shell.exec(
+                    "test -e ${PathGuard.quote("$dir/$command")} || test -L ${PathGuard.quote("$dir/$command")}",
+                ).isSuccess
+                if (!exists) {
+                    Shell.exec(
+                        "ln -s ${PathGuard.quote("${LbPaths.SYSTEM_BIN}/$command")} ${PathGuard.quote("$dir/$command")}",
+                    )
+                }
+            }
+        }
     }
 
     private fun stageDir(name: String): String = "${LbPaths.CACHE}/stage/$name"
@@ -549,6 +596,7 @@ class LinuxInstaller(
 
     private companion object {
         const val PHASE_MERGE = "merge"
+        val ROOT_BIN_DIRS = listOf("/data/adb/ksu/bin", "/data/adb/ap/bin", "/data/adb/magisk")
         private val BLOCKED_COMMANDS = setOf(
             "sh", "bash", "su", "ls", "cat", "cp", "mv", "rm", "mount", "umount",
             "pm", "am", "id", "echo", "test", "mkdir", "chmod", "chown", "tar",
