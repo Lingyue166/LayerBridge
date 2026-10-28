@@ -17,7 +17,7 @@ App 把状态放在私有目录 `filesDir/state`，每次变更后再通过 `su`
   - `RootStateStorage`：App 使用，经 `Shell`（`su`）读写；
   - `LocalStateStorage`：CLI 与单测使用，直接 `File` 读写。
 - `StatusDb` 的读写方法改为 `suspend`，`syncPrefixDb` 删除。
-- 状态文件格式不变（9 列 + 可选第 10 列 JSON），见 [APIs](../../app/src/main/java/com/lingyue/layerbridge/state/StatusDb.kt)。
+- 状态文件格式不变（9 列 + 可选第 10 列 JSON），见 [APIs](../../../app/src/main/java/com/lingyue/layerbridge/state/StatusDb.kt)。
 
 ## 后果
 
