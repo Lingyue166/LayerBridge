@@ -46,6 +46,7 @@ class LinuxInstaller(
             )
             if (!result.isSuccess) error("初始化前缀失败：${result.output}")
             writeEnvFile()
+            syncRootLinks()
         }
     }
 
@@ -309,12 +310,15 @@ class LinuxInstaller(
         withContext(Dispatchers.IO) {
             runCatching {
                 if (enabled) {
-                    Shell.writeFile(LbPaths.EXPOSE_ROOT_FLAG, "enabled\n", "600")
+                    Shell.exec("rm -f ${PathGuard.quote(LbPaths.NO_EXPOSE_ROOT_FLAG)}")
                 } else {
-                    Shell.exec("rm -f ${PathGuard.quote(LbPaths.EXPOSE_ROOT_FLAG)}")
+                    Shell.writeFile(LbPaths.NO_EXPOSE_ROOT_FLAG, "disabled\n", "600")
                 }
                 syncRootLinks()
-                onLog(if (enabled) "[lb] 已启用 root shell 软链" else "[lb] 已移除 root shell 软链")
+                onLog(
+                    if (enabled) "[lb] root shell 软链已启用（默认行为），之后安装/卸载自动维护"
+                    else "[lb] root shell 软链已关闭，已清理现有链接",
+                )
             }
         }
 
@@ -344,7 +348,8 @@ class LinuxInstaller(
                 "find ${PathGuard.quote(dir)} -maxdepth 1 -type l -lname ${PathGuard.quote("${LbPaths.SYSTEM_BIN}/*")} -delete",
             )
         }
-        if (Shell.exec("test -f ${PathGuard.quote(LbPaths.EXPOSE_ROOT_FLAG)}").isSuccess.not()) return
+        // 默认开启；只有显式写了 no-expose-root 才不建链
+        if (Shell.exec("test -f ${PathGuard.quote(LbPaths.NO_EXPOSE_ROOT_FLAG)}").isSuccess) return
 
         val files = statusDb.load().flatMap { statusDb.readFileList(it.name) }
         ExposeCommands.of(files, BLOCKED_COMMANDS).forEach { command ->

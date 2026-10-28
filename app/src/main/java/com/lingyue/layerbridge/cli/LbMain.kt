@@ -70,7 +70,7 @@ object LbMain {
               lb upgrade [选项] <包文件>  升级/降级已安装包到任意版本（不要求相邻版本）
                   --allow-unsigned        允许无签名包（仍需结构校验）
                   --skip-scan             跳过维护脚本静态检测
-              lb expose-root [--remove] 把包命令软链到 root shell 的 PATH（700 目录，非 root 不可见）
+              lb expose-root [--remove] root shell 软链（默认开启，--remove 关闭）
                   --force / -f            连同数据、残留一起清除（同 lb purge）
               lb purge <包名>            强制卸载（= lb remove --force）
 
@@ -130,6 +130,7 @@ object LbMain {
         println("expose: ${if (File(LbPaths.EXPOSE_FLAG).isFile) "system（命令暴露到 /system/bin，可被检测）" else "stealth（仅 root 可见）"}")
         println("前缀权限: ${lsLine(LbPaths.BASE)}")
         println("overlay: ${if (overlayMounted()) "已挂载（可被检测）" else "未挂载"}")
+        println("root-links: ${rootLinkCount()} 个（lb expose-root --remove 可关闭）")
         println("module: ${File(LbPaths.MODULE_DIR).isDirectory}")
         println("apk: ${File("${LbPaths.BASE}/lb.apk").isFile}")
         println("entry: ${lsLine("/system/bin/lb")}")
@@ -224,6 +225,11 @@ object LbMain {
     private fun lsLine(path: String): String = runCatching {
         ProcessBuilder("ls", "-ld", path).start().inputStream.bufferedReader().readText().trim()
     }.getOrDefault("-")
+
+    private fun rootLinkCount(): Int = runCatching {
+        ProcessBuilder("sh", "-c", "find /data/adb/ksu/bin /data/adb/ap/bin /data/adb/magisk -maxdepth 1 -type l -lname '${LbPaths.SYSTEM_BIN}/*' 2>/dev/null | wc -l")
+            .start().inputStream.bufferedReader().readText().trim().toInt()
+    }.getOrDefault(0)
 
     private fun overlayMounted(): Boolean = runCatching {
         ProcessBuilder("grep", "-q", "${LbPaths.OVERLAY_UPPER}", "/proc/mounts").start().waitFor() == 0

@@ -25,7 +25,7 @@ Android 原生的 Linux 包管理器：把 bionic/aarch64 的 Linux 包安装到
 - 可选系统暴露：存在 `$BASE/config/expose-system` 时恢复 overlay + 模块 bin + mkshrc 注入（会在 mount 表留痕）。
 - 状态库单一来源：`/data/adb/lb/db`（App 经 su 读写，CLI 直接读写），见 [ADR 0006](md/60-changes/adr/0006-single-state-source.md)。
 - `lb` 命令：env / list / info / doctor / shell / exec / install / upgrade / remove [--force] / purge / expose-root，`lb cli` 交互模式；输出逐行实时打印。
-- `lb expose-root`：把包命令软链到 root 管理器的 bin 目录（`/data/adb/ksu/bin` 等，700），root shell 直接可用，普通应用不可见；安装/卸载时自动维护，`--remove` 关闭。
+- root shell 软链默认开启：安装/卸载时自动把包命令软链到 `/data/adb/ksu/bin`（700），root shell 直接可用、普通应用不可见；`lb expose-root --remove` 关闭，`lb expose-root` 恢复。
 
 尚未完成 / 已知限制：
 
