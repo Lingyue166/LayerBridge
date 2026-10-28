@@ -9,6 +9,7 @@ object LbPaths {
     const val ENV_FILE = "$BASE/env.sh"
     const val HOME = "$BASE/home"
     const val TMP = "$PREFIX/tmp"
+    const val TRUST_DIR = "$BASE/trust"
     const val MODULE_DIR = "/data/adb/modules/lb"
     const val MODULE_SYSTEM_BIN = "$MODULE_DIR/system/bin"
 
@@ -28,6 +29,7 @@ object LbPaths {
         DB_DIR,
         "$DB_DIR/info",
         "$BASE/hooks",
+        TRUST_DIR,
         "$BASE/cache",
         HOME,
     )

@@ -19,12 +19,11 @@ Android 原生的 Linux 包管理器：把 bionic/aarch64 的 Linux 包安装到
 - 本地 `.deb` 签名校验（`.sig`）与 LBPA 解析/签名校验（未配置信任根时拒绝）。
 - 恶意检测：脚本规则扫描，命中阻断安装。
 - 前缀 `/data/local/lb/usr`、`env.sh`、`/system/bin` wrapper（写 overlay upper）。
-- 状态库（App 私有 + 前缀副本）。
-- 模块资产与 `lb` 命令骨架（env/list/doctor/shell）。
+- 状态库单一来源：`/data/local/lb/db`（App 经 su 读写，CLI 直接读写），见 [ADR 0006](md/60-changes/adr/0006-single-state-source.md)。
+- `lb` 命令：env / list / doctor / shell / install（本地 .deb/.lbpa）/ remove。
 
 尚未完成 / 已知限制：
 
-- CLI `lb install/remove` 尚未实现（App 可安装；CLI 只读命令可用）。
 - App 内“安装模块”按钮未实现；目前需手动把 `app/src/main/assets/module` 安装到 `/data/adb/modules/lb` 或用脚本产物。
 - 信任根导入 / CA 签发 UI 未实现；本地包签名校验需要预置 `files/trust/root.json`。
 - LBPA 打包工具（`lb pack`）与证书签发工具（`lb ca`）未实现。
@@ -61,6 +60,7 @@ bash scripts/build-module.sh
 3. “更新索引”拉取 Termux 官方索引并验签。
 4. 搜索并安装；日志在页面底部。
 5. 模块安装后重启，`lb env` / 新开 shell 可获得前缀环境。
+6. 也可以直接用 CLI 安装本地包：`su -c 'lb install /sdcard/foo.deb'`、`su -c 'lb remove foo'`。
 
 ## 安全
 
