@@ -152,4 +152,36 @@ class LbpaTest {
             LbpaFile.parse(buildLbpa(manifest, payload, signedBlock = null))
         }
     }
+
+    @Test
+    fun parsesDataPathsForUninstallRetention() {
+        val payload = "payload".toByteArray()
+        val manifest = LbpaManifest(
+            format = "LAYERBRIDGEPACKONANDROID",
+            formatVersion = 1,
+            packageInfo = LbpaPackageInfo("hello", "1.0", "aarch64"),
+            payload = LbpaPayload("xz", payload.size.toLong(), PackageSigner.sha256Hex(payload)),
+            data = listOf("etc/hello.conf", "var/lib/hello"),
+        )
+
+        val parsed = LbpaFile.parse(buildLbpa(manifest, payload, signedBlock = null))
+
+        assertEquals(listOf("etc/hello.conf", "var/lib/hello"), parsed.manifest.data)
+    }
+
+    @Test
+    fun rejectsDataPathsOutsidePrefix() {
+        val payload = "payload".toByteArray()
+        val manifest = LbpaManifest(
+            format = "LAYERBRIDGEPACKONANDROID",
+            formatVersion = 1,
+            packageInfo = LbpaPackageInfo("hello", "1.0", "aarch64"),
+            payload = LbpaPayload("xz", payload.size.toLong(), PackageSigner.sha256Hex(payload)),
+            data = listOf("../etc/passwd"),
+        )
+
+        assertThrows(LbpaFormatException::class.java) {
+            LbpaFile.parse(buildLbpa(manifest, payload, signedBlock = null))
+        }
+    }
 }

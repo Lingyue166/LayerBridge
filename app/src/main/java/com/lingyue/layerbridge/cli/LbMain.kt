@@ -40,7 +40,8 @@ object LbMain {
         "cli" -> commandLoop()
         "install" -> install(args.drop(1), requireInstalled = false)
         "upgrade" -> install(args.drop(1), requireInstalled = true)
-        "remove", "uninstall" -> remove(args.drop(1))
+        "remove", "uninstall" -> remove(args.drop(1), forceByCommand = false)
+        "purge" -> remove(args.drop(1), forceByCommand = true)
         "update" -> pending(args.first())
         else -> {
             System.err.println("未知命令：${args.first()}")
@@ -66,7 +67,9 @@ object LbMain {
               lb upgrade [选项] <包文件>  升级/降级已安装包到任意版本（不要求相邻版本）
                   --allow-unsigned        允许无签名包（仍需结构校验）
                   --skip-scan             跳过维护脚本静态检测
-              lb remove <包名>           卸载已安装包
+              lb remove [--force] <包名> 卸载；默认保留数据/配置
+                  --force / -f            连同数据、残留一起清除（同 lb purge）
+              lb purge <包名>            强制卸载（= lb remove --force）
 
             示例：
               su -c 'lb install /sdcard/hello.deb'
@@ -164,14 +167,15 @@ object LbMain {
         }
     }
 
-    private fun remove(args: List<String>): Int {
-        if (args.size != 1) return usageError("用法：lb remove <包名>")
-        val name = args.single()
+    private fun remove(args: List<String>, forceByCommand: Boolean): Int {
+        val options = parseRemove(args).getOrElse { return usageError(it.message.orEmpty()) }
+        val name = options.name
         if (!PathGuard.isPackageName(name)) return fail("非法包名：$name")
         if (!isRoot()) return fail("需要 root：请使用 su 运行 lb")
+        val force = forceByCommand || options.force
 
         return runBlocking {
-            createInstaller().uninstall(name) { println(it) }.fold(
+            createInstaller().uninstall(name, force) { println(it) }.fold(
                 onSuccess = { println("[lb] 已卸载 $name"); 0 },
                 onFailure = { println("[lb] 卸载失败：${it.message}"); 1 },
             )
@@ -228,6 +232,28 @@ internal fun describe(pkg: InstalledPackage): String = buildString {
     pkg.relations.conflicts?.let { appendLine("Conflicts: $it") }
     pkg.relations.breaks?.let { appendLine("Breaks: $it") }
     if (pkg.removeHooks.isNotEmpty()) appendLine("RemoveHooks: ${pkg.removeHooks.joinToString(", ")}")
+}
+
+/** `lb remove` 的参数解析：默认保留数据，`--force`/`-f`/`--purge` 才全清。 */
+internal data class RemoveOptions(val name: String, val force: Boolean)
+
+internal fun parseRemove(args: List<String>, forceByDefault: Boolean = false): Result<RemoveOptions> {
+    var force = forceByDefault
+    val targets = mutableListOf<String>()
+    args.forEach { arg ->
+        when (arg) {
+            "--force", "-f", "--purge" -> force = true
+            else -> if (arg.startsWith("-")) {
+                return Result.failure(IllegalArgumentException("未知参数：$arg"))
+            } else {
+                targets += arg
+            }
+        }
+    }
+    if (targets.size != 1) {
+        return Result.failure(IllegalArgumentException("用法：lb remove [--force] <包名>"))
+    }
+    return Result.success(RemoveOptions(targets.single(), force))
 }
 
 /** `lb install` 的参数解析；不合法时返回 failure，由调用方决定退出码。 */

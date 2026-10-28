@@ -85,6 +85,25 @@ class StatusDb(
             .map { it.trim() }
             .filter { it.isNotEmpty() && PathGuard.isRelativePath(it) }
 
+    /** 卸载默认保留的数据文件清单；`lb remove --force` 才会连带删除。 */
+    suspend fun readPreservedData(name: String): List<String> =
+        storage.readText(dataPath(name))?.lines().orEmpty()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && PathGuard.isRelativePath(it) }
+
+    suspend fun writePreservedData(name: String, paths: List<String>) {
+        require(PathGuard.isPackageName(name)) { "非法包名：$name" }
+        if (paths.isEmpty()) {
+            storage.delete(dataPath(name))
+            return
+        }
+        storage.writeText(dataPath(name), paths.distinct().joinToString("\n", postfix = "\n"))
+    }
+
+    suspend fun deletePreservedData(name: String) {
+        storage.delete(dataPath(name))
+    }
+
     suspend fun beginTransaction(name: String, version: String) {
         require(PathGuard.isPackageName(name)) { "非法包名：$name" }
         writeTransaction(InstallTransaction(name, version, PHASE_BEGIN))
@@ -111,6 +130,8 @@ class StatusDb(
     private fun transactionPath(name: String): String = "$rootDir/transactions/$name.json"
 
     private fun listPath(name: String): String = "$rootDir/info/$name.list"
+
+    private fun dataPath(name: String): String = "$rootDir/data/$name.list"
 
     private fun encode(pkg: InstalledPackage): String {
         val columns = mutableListOf(

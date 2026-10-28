@@ -79,6 +79,7 @@
 | `upgrade` | object | 否 | 升级策略，见 4.9 |
 | `env` | object | 否 | 安装后追加的环境变量 |
 | `expose` | array | 否 | 需要暴露到 `/system/bin` 的命令路径 |
+| `data` | array | 否 | 用户数据/配置路径，卸载默认保留，见 4.10 |
 | `gui` | bool | 否 | 图形工具提示，仅用于 UI |
 | `installedSize` | int | 否 | 安装后大小（KiB） |
 | `description` | string | 否 | 简介 |
@@ -201,7 +202,7 @@ LBPA 允许**任意版本升级到任意版本**（含降级、同版本重装�
 
 | 字段 | 类型 | 必须 | 说明 |
 |---|---|---|---|
-| `keep` | array | 否 | 升级前备份、解包后恢复的路径；旧内容优先，防止新版覆盖配置 |
+| `keep` | array | 否 | 升级前备份、解包后恢复的路径；旧内容优先，防止新版覆盖配置（自动并入 `data`） |
 | `remove` | array | 否 | 升级时额外删除的旧路径 |
 | `scripts.pre` | string | 否 | 解包前执行，参数 `<old-version>`；缺失时回退 `scripts.preinst` |
 | `scripts.post` | string | 否 | 解包后执行，参数 `<old-version>`；缺失时回退 `scripts.postinst` |
@@ -209,6 +210,17 @@ LBPA 允许**任意版本升级到任意版本**（含降级、同版本重装�
 - 路径相对前缀、不得含 `..`；脚本路径必须在 `control/` 下。
 - 未声明 `keep` 时，旧包中已不存在于新包的文件按文件清单自动清理。
 - 旧包的 `prerm` 在新包脚本落盘之前以 `prerm upgrade <new-version>` 执行，失败则中止升级。
+
+### 4.10 `data`
+
+```json
+["etc/hello.conf", "var/lib/hello"]
+```
+
+- 包声明的用户数据/配置，路径相对前缀、不得含 `..`。
+- **卸载默认保留**：`lb remove <pkg>` 不删这些文件；`lb remove --force`（或 `lb purge`）才删除。
+- 升级时自动并入 `upgrade.keep`，即新版 payload 不会覆盖它们。
+- 未声明时：deb 用控制文件的 `Conffiles`，LBPA 不保留任何文件。
 
 ## 5. Payload
 
@@ -259,10 +271,14 @@ files/…       # 安装进前缀的文件树
 卸载：
 
 1. 执行 `scripts.prerm`、`hooks.remove`。
-2. 按「状态库文件清单 ∪ 事务文件清单」删除前缀内文件，清理空目录。
+2. 按「状态库文件清单 ∪ 事务文件清单」删除前缀内文件，清理空目录；
+   `data`（deb 为 `Conffiles`）默认跳过，`--force` 时一并删除。
 3. 删除 wrapper、清理 `env.sh` 段、删除钩子。
 4. 执行 `scripts.postrm`。
 5. 删除状态行、事务文件、`db/scripts/<name>`、暂存与升级备份目录。
+
+默认卸载后数据文件仍保留，其清单记录在 `$DB/data/<name>.list`；
+此后再执行 `lb remove --force <name>` 可单独清掉这批数据。
 
 安装事务与崩溃清理：
 

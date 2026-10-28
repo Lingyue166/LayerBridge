@@ -77,6 +77,7 @@ data class LbpaManifest(
     val upgrade: LbpaUpgrade? = null,
     val env: Map<String, String>? = null,
     val expose: List<String>? = null,
+    val data: List<String>? = null,
     val gui: Boolean? = null,
     val installedSize: Long? = null,
     val description: String? = null,
@@ -267,6 +268,9 @@ class LbpaFile private constructor(
             }
             manifest.expose.orEmpty().forEach {
                 if (!PathGuard.isRelativePath(it)) throw LbpaFormatException("非法 expose 路径：$it")
+            }
+            manifest.data.orEmpty().forEach {
+                if (!PathGuard.isRelativePath(it)) throw LbpaFormatException("非法 data 路径：$it")
             }
             manifest.env?.forEach { (key, value) ->
                 if (!ENV_KEY.matches(key)) throw LbpaFormatException("非法环境变量名：$key")

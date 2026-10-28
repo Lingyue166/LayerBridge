@@ -93,4 +93,15 @@ class StatusDbTest {
         db.endTransaction("foo")
         assertNull(db.readTransaction("foo"))
     }
+
+    @Test
+    fun preservedDataSurvivesNormalUninstallRegistration() = runBlocking {
+        val db = StatusDb(LocalStateStorage(), tmp.root.absolutePath)
+
+        db.writePreservedData("foo", listOf("etc/foo.conf", "var/lib/foo/db"))
+        assertEquals(listOf("etc/foo.conf", "var/lib/foo/db"), db.readPreservedData("foo"))
+
+        db.writePreservedData("foo", emptyList())
+        assertTrue(db.readPreservedData("foo").isEmpty())
+    }
 }

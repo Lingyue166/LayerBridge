@@ -72,7 +72,8 @@ class LinuxInstaller(
             logUpgrade(existing, version, onLog)
 
             val oldFiles = statusDb.readFileList(name)
-            val keep = existing?.let { control.conffiles }.orEmpty()
+            val dataFiles = control.conffiles
+            val keep = existing?.let { dataFiles }.orEmpty()
 
             // 旧包的 prerm 必须在覆盖 db/scripts 之前执行
             existing?.let { old ->
@@ -111,7 +112,7 @@ class LinuxInstaller(
                     scan = if (policy.malwareScan) "pass" else "skipped",
                     scriptsStatus = scriptsStatus,
                     relations = relations,
-                ).also { finishInstall(it, paths, onLog) }
+                ).also { finishInstall(it, paths, dataFiles, onLog) }
             } catch (t: Throwable) {
                 maintainerScripts.clear(name)
                 throw t
@@ -156,7 +157,8 @@ class LinuxInstaller(
             logUpgrade(existing, version, onLog)
 
             val oldFiles = statusDb.readFileList(name)
-            val keep = if (existing != null) upgrade?.keep.orEmpty() else emptyList()
+            val dataFiles = parsed.manifest.data.orEmpty()
+            val keep = if (existing != null) (upgrade?.keep.orEmpty() + dataFiles).distinct() else emptyList()
             val extraRemove = upgrade?.remove.orEmpty()
 
             // 旧包的 prerm 必须在覆盖 db/scripts 之前执行
@@ -205,7 +207,7 @@ class LinuxInstaller(
                     scriptsStatus = scriptsStatus,
                     relations = relations,
                     removeHooks = removeHooks,
-                ).also { finishInstall(it, paths, onLog) }
+                ).also { finishInstall(it, paths, dataFiles, onLog) }
             } catch (t: Throwable) {
                 maintainerScripts.clear(name)
                 throw t
@@ -215,24 +217,37 @@ class LinuxInstaller(
     }
 
     /**
-     * 卸载以「状态库 ∪ 安装事务」为准，因此安装任意阶段崩溃/被杀后仍能清干净：
-     * 事务文件记录解包到一半的文件清单，暂存目录按包名约定清理。
+     * 卸载以「状态库 ∪ 安装事务」为准，因此安装任意阶段崩溃/被杀后仍能清干净。
+     * 默认保留包声明的数据/配置（deb Conffiles、LBPA data），`force=true` 才全清。
      */
-    suspend fun uninstall(name: String, onLog: (String) -> Unit): Result<Unit> =
+    suspend fun uninstall(name: String, force: Boolean = false, onLog: (String) -> Unit): Result<Unit> =
         withContext(Dispatchers.IO) {
             runCatching {
                 require(PathGuard.isPackageName(name)) { "非法包名：$name" }
                 val pkg = statusDb.find(name)
                 val transaction = statusDb.readTransaction(name)
-                val files = (statusDb.readFileList(name) + transaction?.files.orEmpty())
+                val recorded = (statusDb.readFileList(name) + transaction?.files.orEmpty())
                     .distinct()
                     .filter { PathGuard.isRelativePath(it) }
+                val preserved = statusDb.readPreservedData(name)
+                val keep = if (force) emptySet() else preserved.toSet()
+                val removal = recorded.filterNot { it in keep }
 
-                if (pkg == null && transaction == null && files.isEmpty()) {
-                    // 安装死在脚本落盘阶段时也会留下目录，一并清掉
-                    maintainerScripts.clear(name)
-                    purgePackageDirs(name)
-                    onLog("[lb] 未安装且无残留：$name")
+                if (pkg == null && transaction == null) {
+                    if (force && preserved.isNotEmpty()) {
+                        removeFiles(preserved)
+                        removeEmptyDirs(preserved)
+                        statusDb.deletePreservedData(name)
+                        onLog("[lb] 已清除 ${preserved.size} 个数据文件：$name")
+                    } else {
+                        maintainerScripts.clear(name)
+                        purgePackageDirs(name)
+                        if (preserved.isNotEmpty()) {
+                            onLog("[lb] 已卸载，保留 ${preserved.size} 个数据文件（lb remove --force $name 清理）")
+                        } else {
+                            onLog("[lb] 未安装且无残留：$name")
+                        }
+                    }
                     return@runCatching
                 }
 
@@ -245,11 +260,11 @@ class LinuxInstaller(
                     if (result != null && !result.isSuccess) onLog("[lb] 卸载钩子失败：$hook")
                 }
 
-                if (files.isNotEmpty()) {
-                    removeFiles(files)
-                    removeEmptyDirs(files)
+                if (removal.isNotEmpty()) {
+                    removeFiles(removal)
+                    removeEmptyDirs(removal)
                 }
-                removeWrappers(name, files)
+                removeWrappers(name, removal)
 
                 val postrm = maintainerScripts.run(name, version, "postrm", listOf("remove"), onLog)
                 if (postrm != null && !postrm.isSuccess) onLog("[lb] postrm 失败：$name")
@@ -257,10 +272,18 @@ class LinuxInstaller(
                 // 状态最后删：中途失败可重跑，残留仍可被下一次 uninstall 找到
                 statusDb.remove(name)
                 statusDb.endTransaction(name)
+                if (force) {
+                    statusDb.deletePreservedData(name)
+                } else {
+                    val kept = preserved.filter { it in recorded }
+                    if (kept.isNotEmpty()) {
+                        onLog("[lb] 保留 ${kept.size} 个数据文件（lb remove --force $name 清理）")
+                    }
+                }
                 maintainerScripts.clear(name)
                 purgePackageDirs(name)
                 writeEnvFile()
-                onLog("[lb] 已卸载 $name（清理 ${files.size} 个文件）")
+                onLog("[lb] 已卸载 $name（清理 ${removal.size} 个文件）")
             }
         }
 
@@ -268,9 +291,15 @@ class LinuxInstaller(
         runCatching { writeEnvFile() }
     }
 
-    private suspend fun finishInstall(pkg: InstalledPackage, paths: List<String>, onLog: (String) -> Unit) {
+    private suspend fun finishInstall(
+        pkg: InstalledPackage,
+        paths: List<String>,
+        dataFiles: List<String>,
+        onLog: (String) -> Unit,
+    ) {
         statusDb.upsert(pkg)
         statusDb.writeFileList(pkg.name, paths)
+        statusDb.writePreservedData(pkg.name, dataFiles)
         writeEnvFile()
         writeWrappers(pkg.name, paths)
         statusDb.endTransaction(pkg.name)
