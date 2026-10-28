@@ -7,13 +7,12 @@
 ## 背景
 
 原设计默认把命令写进 `/system/bin`（overlay upper + 模块 bin），并向前缀
-`chmod 755`。这带来三个普通应用可观测的信号：
+`chmod 755`。普通应用因此有四个可观测信号：
 
 1. `/proc/mounts` 里能看到 `lowerdir=/system/bin,upperdir=/data/local/lb/...` 的 overlay；
 2. `/system/bin` 目录里出现非系统镜像的命令文件；
-3. 前缀目录 `755`，只要知道路径就能 `stat`/遍历。
-
-此外 mkshrc bind mount 也会在挂载表留下痕迹。
+3. 前缀目录 `755`，只要知道路径就能 `stat`/遍历；
+4. mkshrc bind mount 在挂载表留下痕迹。
 
 ## 决策
 

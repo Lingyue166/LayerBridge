@@ -380,7 +380,7 @@ lb 接受两种格式，解析后归一到同一个 `PackageMeta` 与安装管�
 
 **C. 拒绝的格式**：`.zip`、含 `module.prop`/`customize.sh` 的 root 管理器模块、无 control 的 deb、魔数与 manifest 不符的伪 LBPA。
 
-**D. 互转**：`lb pack --from-deb foo.deb -o foo.lbpa` 无损转换；两种格式可在同一仓库共存。
+**D. 互转**：`lb pack --from-deb foo.deb -o foo.lbpa` 无损转换；两种格式可在同一仓库共存。（工具未实现）
 
 ### 9.2 仓库
 
@@ -560,43 +560,48 @@ ln -s /data/adb/lb/usr /data/data/com.termux/files/usr
 
 ### 13.1 启动方式
 
-模块 `/system/bin/lb` → `app_process` 加载 `/data/adb/lb/lb.apk` → `com.lingyue.layerbridge.cli.LbMain`。以 shell 身份运行；需要 root 的步骤内部调用 `su`。
+模块 `/system/bin/lb` → `app_process` 加载 `/data/adb/lb/lb.apk` → `com.lingyue.layerbridge.cli.LbMain`。以调用者身份运行；写操作要求 uid=0，子进程经 `su` 执行。
 
 ### 13.2 命令
 
+已实现：
+
 | 命令 | 说明 |
 |---|---|
-| `lb search <关键词>` | 搜索所有启用仓库 |
-| `lb list [installed\|available\|upgradable]` | 列表 |
-| `lb info <包>` | 详情、依赖、脚本、来源 |
-| `lb install <包...>` | 解析依赖并热安装 |
-| `lb install ./x.deb` | 安装本地 deb |
-| `lb install ./x.lbpa` | 安装本地 LBPA（`.lpa`/`.lb`/`.lbp` 同） |
-| `lb pack <目录> -o x.lbpa` | 从目录生成 LBPA |
-| `lb pack --from-deb x.deb -o x.lbpa` | deb → LBPA 无损转换 |
-| `lb inspect <包>` | 查看格式、manifest、payload 哈希、脚本、钩子 |
-| `lb ca init/issue/revoke` | 根证书初始化、签发二级证书、撤销 |
-| `lb sign <包> --key ... --cert ...` | 签 LBPA 或生成 deb 的 `.sig` |
-| `lb verify <包> [--sig ...]` | 验证证书链与签名 |
-| `lb trust import/list` | 信任根管理 |
-| `lb trust repo add/list/remove` | 仓库签名信任（Termux/自定义仓库） |
-| `lb config get/set` | 开发者开关（签名/检测） |
-| `lb scan <包>` | 单独运行恶意检测 |
-| `lb remove <包...>` | 卸载（检查反向依赖） |
-| `lb upgrade [包...]` | 升级 |
-| `lb repo list/add/remove` | 仓库管理 |
+| `lb install [--allow-unsigned] [--skip-scan] <文件>` | 安装本地 deb / LBPA |
+| `lb upgrade [选项] <文件>` | 升降级（要求已安装） |
+| `lb remove [--force] <包>` / `lb purge <包>` | 卸载；默认保留数据 |
+| `lb list` | 已安装列表 |
+| `lb info <包>` | 版本、来源、签名者、关系 |
+| `lb doctor` | root、前缀权限、入口、trust、root 软链 |
 | `lb env` | 打印 `env.sh` |
 | `lb shell` | 进入带环境的 shell |
-| `lb run <cmd...>` | 带环境执行 |
-| `lb expose <cmd> [--force]` | 手动生成/覆盖系统 wrapper |
-| `lb hook list/run` | 钩子管理 |
-| `lb module status/install` | 模块状态与安装 |
-| `lb doctor` | 自检：root、overlay、前缀、环境 |
+| `lb exec <命令...>` | 带环境执行一条命令 |
+| `lb cli` | 交互模式 |
+| `lb expose-root [--remove]` | root shell 软链开关（默认开） |
+| `lb version` | 版本 |
+
+规划、未实现：
+
+| 命令 | 说明 |
+|---|---|
+| `lb search` / `lb repo` | 仓库搜索与管理（目前只在 App） |
+| `lb pack` / `lb inspect` | LBPA 打包与检查 |
+| `lb ca` / `lb sign` / `lb verify` | 证书与签名（PC 端脚本 `scripts/lb-sign.py` 可用） |
+| `lb trust` | 信任根、仓库信任管理（与 `trust/root.json` 一致） |
+| `lb config` | 开发者开关（目前由 App 与安装参数控制） |
+| `lb scan` | 单独运行静态检测 |
+| `lb hook` / `lb module` | 钩子与模块状态 |
+| `lb update` | 占位，未实现 |
 
 ### 13.3 输出与退出码
 
-- 人类可读输出到 stdout，日志/进度到 stderr。
-- `0` 成功；`1` 参数/网络错误；`2` 依赖或冲突；`3` root 不可用；`4` 安装脚本失败；`5` 格式/模块包被拒绝；`6` 未授权签名；`7` 签名/证书校验失败；`8` 恶意检测拦截。
+当前实现：
+
+- 输出到 stdout，日志逐行打印。
+- `0` 成功；`1` 业务失败（未安装、签名、依赖、脚本）；`2` 用法错误。
+
+其余退出码（3–8）属于早期规划，未实现。
 
 ---
 
@@ -766,33 +771,35 @@ export ANDROID_HOME="$HOME/Android/Sdk"
 
 ./gradlew --no-daemon :app:testDebugUnitTest
 # 期望：全部通过（版本、依赖、ar/control、索引、重写、状态库、wrapper 生成、
-# LBPA 解析/打包、证书链/签名、仓库 OpenPGP 验证、恶意规则、开发者策略）
+# LBPA 解析、证书链/签名、仓库 OpenPGP 验证、恶意规则、CLI 参数解析）
 
 ./gradlew --no-daemon :app:lintDebug
 # 期望：0 Error
 
 bash scripts/build-module.sh
 unzip -l build/lb-module.zip
-# 期望包含 module.prop、post-fs-data.sh、service.sh、system/bin/lb、system/etc/mkshrc
+# 期望包含 module.prop、post-fs-data.sh、service.sh、system/bin/lb
 ```
 
-### 18.2 真机清单（待执行，当前标“未验证”）
+### 18.2 真机清单
 
-1. 安装 App，授予 root（KSU/SukiSU 管理器内授权）。
-2. App 安装模块 → 重启 → `which lb`、`lb doctor` 正常。
-3. 新开 `adb shell`，`echo $PREFIX`、`echo $PATH` 含前缀。
-4. `lb ca init` 或导入根证书 → `lb trust list` 显示指纹；`lb trust repo list` 显示 Termux 指纹。
-5. `lb install hello`（Termux 官方仓库）→ 通过仓库签名验证，安装成功；`hello`、`su -c hello` 均可用。
-6. 篡改本地 `Packages` 或某个 deb 一个字节 → 仓库签名/哈希校验拒绝。
-7. 直接装未签名本地 `.deb` → 拒绝（退出码 6），缓存被删除。
-8. 用二级证书签名 LBPA → `lb install hello.lbpa` 成功。
-9. 篡改 LBPA payload 一个字节 → 拒绝（签名/哈希），缓存删除。
-10. 构造含 `rm -rf /system` 的钩子包 → 被阻断，缓存删除，日志可查。
-11. 开发者模式：关闭“强制签名”→ 未签名可装；关闭“自动检测”→ 恶意包不阻断但结构校验仍生效；重新开启后恢复。
-12. `lb remove hello` → 命令立即消失（`/system/bin/hello` 不存在），无需重启。
-13. 尝试安装 Magisk 模块 zip → 拒绝，退出码 5。
-14. `lb pack --from-deb hello.deb -o hello.lbpa` → `lb inspect` 正常；改名为 `.lb`/`.lpa` 仍可安装。
-15. 重启后确认 overlay/命令/钩子持久化。
+已在 Android 17 + SukiSU（内核 6.6）跑过 1–10；其余项待补。
+
+1. 安装 APK，授予 root。
+2. 模块管理器安装 `lb-module.zip` → 重启 → `su -c 'lb doctor'`：`module: true`、`entry` 为 `-rwx------`。
+3. 非 root 进程 `stat /data/adb/lb` → `EACCES`；`ls /system/bin/lb` 只有名字。
+4. 装根证书：PC 端 `scripts/lb-sign.py init`，把 `certs/lb-root.json` 复制为 `/data/adb/lb/trust/root.json`（0600）→ `lb doctor | grep trust` 为 true。
+5. 装已签名本地 deb（配 `.sig`）→ 成功；`lb info` 的 `Signer` 显示证书 subject。
+6. 装无签名本地 deb → 拒绝「未授权签名」。
+7. 加 `--allow-unsigned` 重装 → 成功。
+8. `su -c hello` 直接可用（root 软链）；`lb expose-root --remove` 后失效，`lb expose-root` 恢复。
+9. `lb remove` 保留数据文件；`lb purge` 删除干净。
+10. `lb upgrade` 升降级；旧版本文件按清单清理。
+11. 安装中 `kill -9`，再 `lb remove` → 清理暂存、事务、wrapper、脚本。
+12. Magisk 模块 zip 改后缀为 `.deb` → 魔数/结构校验拒绝。
+13. 维护脚本含 `rm -rf /system` → 静态检测阻断。
+14. 开发者模式关闭强制签名/自动检测，行为符合开关，重新开启后恢复。
+15. 重启后确认前缀权限、`/system/bin/lb` 权限、root 软链、已装包状态保持。
 
 ---
 
@@ -800,7 +807,7 @@ unzip -l build/lb-module.zip
 
 | 风险 | 影响 | 回退 |
 |---|---|---|
-| overlayfs 不可用/挂载失败 | 系统级命令不可见 | 元模块后端；或 mkshrc + `lb shell` |
+| 系统级暴露开启后 overlayfs 不可用 | 命令不进 `/system/bin` | 退回 stealth；用 `lb exec` / `lb shell` |
 | SELinux 拒绝 upper 执行 | root 应用无法运行命令 | 调整上下文/改用元模块；日志提示 |
 | 与 Magisk/其他模块挂载冲突 | 系统不稳定 | 检测并让位；禁用自有 overlay |
 | Termux 包硬编码路径 | 部分包损坏 | 告警 + 前缀桥；优先自编译包 |

@@ -457,19 +457,19 @@ LB-DEB-V1
 
 - 仓库索引可选字段 `Signature:` 指向签名文件；缺省约定为 `Filename + ".sig"`。
 - 本地 deb 安装：需同时选择 `.deb` 与 `.sig`（多选）；无法配对时按未签名处理。
-- 推荐工作流：`lb pack --from-deb foo.deb --sign ...` 转成已签名 LBPA。
+- 推荐工作流：`lb pack --from-deb foo.deb --sign ...` 转成已签名 LBPA。（工具未实现；当前用 PC 端 `scripts/lb-sign.py` 签 deb）
 
 ### 9.6 信任库与策略
 
 | 项 | 说明 |
 |---|---|
-| 信任根 | `/data/adb/lb/trust/root.json`（root 600/644） |
-| 初始化 | `lb ca init` 生成根证书与私钥，或 `lb trust import root.json` 导入现有根 |
-| 私钥 | 根私钥建议离线；若在设备生成，存 `/data/adb/lb/ca/root.key`，权限 600 |
-| 策略 | `/data/adb/lb/config.json`：`require_signature`（默认 true）、`malware_scan`（默认 true） |
-| 受信仓库 | `/data/adb/lb/trust/repos/<id>.json`：URL、OpenPGP 指纹、公钥、启停 |
-| 撤销 | `/data/adb/lb/trust/revocations.json` + `.sig`（根签名）；按 `serial`/`keyId` 拒绝 |
-| 根轮换 | v1 不支持在线轮换；新根需重新导入，旧根可继续并存（后续版本） |
+| 信任根 | `/data/adb/lb/trust/root.json`（0600） |
+| 初始化 | PC 端 `scripts/lb-sign.py init` 生成根证书与私钥；把 `certs/lb-root.json` 复制为 `trust/root.json` |
+| 私钥 | 只保存在 PC（`~/.config/layerbridge/root-key.pem`，0600）；设备不存私钥 |
+| 策略 | 由调用方传入：App 开发者开关，或 CLI 的 `--allow-unsigned`、`--skip-scan`；没有全局配置文件 |
+| 受信仓库 | 目前内置 Termux 官方一条（代码常量 + `assets/trust/termux-autobuilds.gpg`）；自定义仓库导入未实现 |
+| 撤销 | 未实现 |
+| 根轮换 | 不支持；替换 `root.json` 即换根，旧根不再受信 |
 
 安装时的签名判定：
 
@@ -480,6 +480,8 @@ LB-DEB-V1
 5. 两条路径都不满足且策略关闭 → 允许，UI/日志显著警告。
 
 ### 9.7 错误分类
+
+当前 CLI 统一返回 `0`（成功）/`1`（失败）/`2`（用法错误）；本节列出的细分退出码为规划。
 
 | 场景 | 结果 |
 |---|---|
@@ -499,7 +501,7 @@ LB-DEB-V1
 
 apt 仓库不对单个 deb 签名，而是对索引签名。lb 把“受信仓库 + 已签名索引”作为第二条授权路径，因此 Termux 官方包默认可以直接安装，无需重签。
 
-- 受信仓库条目：`/data/adb/lb/trust/repos/<id>.json`
+- 受信仓库目前内置在代码与 assets 中；下面的 JSON 是规划中的自定义仓库格式（未实现）。
 
 ```json
 {
