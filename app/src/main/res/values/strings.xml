@@ -1,4 +1,52 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">LayerBridge</string>
+
+    <string name="action_update_index">Update index</string>
+    <string name="action_init">Init</string>
+    <string name="action_init_prefix">Initialize prefix</string>
+    <string name="action_refresh">Refresh</string>
+
+    <string name="tab_packages">Packages</string>
+    <string name="tab_environment">Environment</string>
+    <string name="tab_icon_packages">P</string>
+    <string name="tab_icon_environment">E</string>
+
+    <string name="search_hint">Search package / description</string>
+    <string name="status_summary">Index %1$d · Installed %2$d</string>
+    <string name="status_verified"> · index verified</string>
+    <string name="badge_installed"> · installed</string>
+
+    <string name="action_install">Install</string>
+    <string name="action_uninstall">Uninstall</string>
+
+    <string name="root_section">Root</string>
+    <string name="root_detecting">Detecting…</string>
+    <string name="root_granted">Granted</string>
+    <string name="root_granted_managers">Granted (%1$s)</string>
+    <string name="root_no_manager">No root manager detected</string>
+    <string name="root_not_granted">Not granted: authorize in %1$s</string>
+
+    <string name="env_section">Environment</string>
+    <string name="env_prefix">Prefix: %1$s</string>
+    <string name="env_installed">Installed: %1$d packages</string>
+    <string name="env_index_verified">Index: verified</string>
+    <string name="env_index_unverified">Index: unverified</string>
+
+    <string name="dev_section">Developer options</string>
+    <string name="dev_require_signature">Require signed packages</string>
+    <string name="dev_malware_scan">Automatic malware scan</string>
+    <string name="dev_note">Structure checks still run when disabled; bad signatures are still rejected.</string>
+
+    <string name="msg_index_updating">Updating index…</string>
+    <string name="msg_index_loaded">Index: %1$d packages</string>
+    <string name="msg_index_loaded_verified">Index: %1$d packages (verified)</string>
+    <string name="msg_index_failed">Update failed: %1$s</string>
+    <string name="msg_installing">Installing %1$s</string>
+    <string name="msg_downloading">Downloading %1$s: %2$d%%</string>
+    <string name="msg_install_failed">Install failed, see log</string>
+    <string name="msg_install_done">Install complete</string>
+    <string name="msg_uninstalling">Uninstalling %1$s</string>
+    <string name="msg_uninstalled">Uninstalled %1$s</string>
+    <string name="msg_uninstall_failed">Uninstall failed: %1$s</string>
 </resources>

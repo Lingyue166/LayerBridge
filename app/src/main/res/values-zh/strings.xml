@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">LayerBridge</string>
+
+    <string name="action_update_index">更新索引</string>
+    <string name="action_init">初始化</string>
+    <string name="action_init_prefix">初始化前缀</string>
+    <string name="action_refresh">刷新</string>
+
+    <string name="tab_packages">软件包</string>
+    <string name="tab_environment">环境</string>
+    <string name="tab_icon_packages">包</string>
+    <string name="tab_icon_environment">环</string>
+
+    <string name="search_hint">搜索包名 / 描述</string>
+    <string name="status_summary">索引 %1$d · 已安装 %2$d</string>
+    <string name="status_verified"> · 索引已验签</string>
+    <string name="badge_installed"> · 已安装</string>
+
+    <string name="action_install">安装</string>
+    <string name="action_uninstall">卸载</string>
+
+    <string name="root_section">Root</string>
+    <string name="root_detecting">检测中…</string>
+    <string name="root_granted">已授权</string>
+    <string name="root_granted_managers">已授权（%1$s）</string>
+    <string name="root_no_manager">未检测到 root 管理器</string>
+    <string name="root_not_granted">未授权：请在 %1$s 中授权</string>
+
+    <string name="env_section">环境</string>
+    <string name="env_prefix">前缀：%1$s</string>
+    <string name="env_installed">已安装：%1$d 个包</string>
+    <string name="env_index_verified">索引：已验签</string>
+    <string name="env_index_unverified">索引：未验签</string>
+
+    <string name="dev_section">开发者选项</string>
+    <string name="dev_require_signature">强制授权签名</string>
+    <string name="dev_malware_scan">自动恶意检测</string>
+    <string name="dev_note">关闭后仍执行结构校验；坏签名仍会拒绝。</string>
+
+    <string name="msg_index_updating">正在更新索引…</string>
+    <string name="msg_index_loaded">索引 %1$d 个包</string>
+    <string name="msg_index_loaded_verified">索引 %1$d 个包（已验签）</string>
+    <string name="msg_index_failed">更新失败：%1$s</string>
+    <string name="msg_installing">正在安装 %1$s</string>
+    <string name="msg_downloading">下载 %1$s：%2$d%%</string>
+    <string name="msg_install_failed">安装失败，查看日志</string>
+    <string name="msg_install_done">安装完成</string>
+    <string name="msg_uninstalling">正在卸载 %1$s</string>
+    <string name="msg_uninstalled">已卸载 %1$s</string>
+    <string name="msg_uninstall_failed">卸载失败：%1$s</string>
+</resources>

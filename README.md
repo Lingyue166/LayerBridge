@@ -55,6 +55,12 @@ export ANDROID_HOME="$HOME/Android/Sdk"
 bash scripts/build-module.sh
 ```
 
+## 语言
+
+界面文案在 `res/values/strings.xml`（英文默认）与 `res/values-zh/strings.xml`（中文）。
+系统按设备语言自动选择；Android 13+ 可在应用信息里单独切换。
+`res/xml/locales_config.xml` 声明支持的语言。
+
 ## 打包
 
 ```bash

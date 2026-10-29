@@ -3,6 +3,7 @@ package com.lingyue.layerbridge.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.lingyue.layerbridge.R
 import com.lingyue.layerbridge.core.LbPaths
 import com.lingyue.layerbridge.core.RootDetector
 import com.lingyue.layerbridge.core.RootInfo
@@ -83,6 +84,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _state.update { it.copy(malwareScan = enabled) }
     }
 
+    private fun str(id: Int, vararg args: Any): String =
+        getApplication<Application>().getString(id, *args)
+
     fun clearLog() = _state.update { it.copy(log = "") }
 
     fun refreshInstalled() {
@@ -113,7 +117,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updateRepo() {
         viewModelScope.launch {
-            _state.update { it.copy(loading = true, message = "正在更新索引…") }
+            _state.update { it.copy(loading = true, message = str(R.string.msg_index_updating)) }
             val result = repoClient.updateIndex(repo)
             result.onSuccess { index ->
                 _state.update {
@@ -121,12 +125,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         packages = index.packages,
                         repoVerified = index.signatureVerified,
                         repoDate = index.releaseDate,
-                        message = "索引 ${index.packages.size} 个包" + if (index.signatureVerified) "（已验签）" else "",
+                        message = if (index.signatureVerified) {
+                            str(R.string.msg_index_loaded_verified, index.packages.size)
+                        } else {
+                            str(R.string.msg_index_loaded, index.packages.size)
+                        },
                     )
                 }
                 appendLog("[repo] ${repo.url}：${index.packages.size} 个包，签名=${index.signatureVerified}")
             }.onFailure {
-                _state.update { state -> state.copy(message = "更新失败：${it.message}") }
+                _state.update { state -> state.copy(message = str(R.string.msg_index_failed, it.message.orEmpty())) }
                 appendLog("[repo] 失败：${it.message}")
             }
             _state.update { it.copy(loading = false) }
@@ -160,12 +168,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         var failed = false
         for (pkg in plan) {
             if (_state.value.installedNames.containsKey(pkg.name)) continue
-            _state.update { it.copy(installing = pkg.name, message = "正在安装 ${pkg.name}") }
+            _state.update { it.copy(installing = pkg.name, message = str(R.string.msg_installing, pkg.name)) }
             appendLog("[lb] 安装 ${pkg.name} ${pkg.version}")
             val download = repoClient.downloadDeb(repo, pkg) { read, total ->
                 if (total > 0) {
                     val percent = (read * 100 / total).toInt()
-                    _state.update { it.copy(message = "下载 ${pkg.name}：$percent%") }
+                    _state.update { it.copy(message = str(R.string.msg_downloading, pkg.name, percent)) }
                 }
             }
             val deb = download.getOrElse {
@@ -187,7 +195,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             it.copy(
                 installing = null,
                 loading = false,
-                message = if (failed) "安装失败，查看日志" else "安装完成",
+                message = str(if (failed) R.string.msg_install_failed else R.string.msg_install_done),
             )
         }
     }
@@ -195,10 +203,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun uninstall(name: String) {
         if (_state.value.installing != null) return
         viewModelScope.launch {
-            _state.update { it.copy(installing = name, message = "正在卸载 $name") }
+            _state.update { it.copy(installing = name, message = str(R.string.msg_uninstalling, name)) }
             installer.uninstall(name) { line -> appendLog(line) }
-                .onSuccess { _state.update { s -> s.copy(message = "已卸载 $name") } }
-                .onFailure { _state.update { s -> s.copy(message = "卸载失败：${it.message}") } }
+                .onSuccess { _state.update { s -> s.copy(message = str(R.string.msg_uninstalled, name)) } }
+                .onFailure { _state.update { s -> s.copy(message = str(R.string.msg_uninstall_failed, it.message.orEmpty())) } }
             refreshInstalled()
             _state.update { it.copy(installing = null) }
         }

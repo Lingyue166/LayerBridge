@@ -38,12 +38,15 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.lingyue.layerbridge.R
+import com.lingyue.layerbridge.core.LbPaths
 import com.lingyue.layerbridge.repo.RepoPackage
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -58,8 +61,8 @@ fun LayerBridgeApp(viewModel: MainViewModel = viewModel()) {
             TopAppBar(
                 title = { Text("LayerBridge") },
                 actions = {
-                    TextButton(onClick = { viewModel.updateRepo() }) { Text("更新索引") }
-                    TextButton(onClick = { viewModel.bootstrap() }) { Text("初始化") }
+                    TextButton(onClick = { viewModel.updateRepo() }) { Text(stringResource(R.string.action_update_index)) }
+                    TextButton(onClick = { viewModel.bootstrap() }) { Text(stringResource(R.string.action_init)) }
                 },
             )
         },
@@ -68,14 +71,14 @@ fun LayerBridgeApp(viewModel: MainViewModel = viewModel()) {
                 NavigationBarItem(
                     selected = tab == 0,
                     onClick = { tab = 0 },
-                    icon = { Text("包") },
-                    label = { Text("软件包") },
+                    icon = { Text(stringResource(R.string.tab_icon_packages)) },
+                    label = { Text(stringResource(R.string.tab_packages)) },
                 )
                 NavigationBarItem(
                     selected = tab == 1,
                     onClick = { tab = 1 },
-                    icon = { Text("环") },
-                    label = { Text("环境") },
+                    icon = { Text(stringResource(R.string.tab_icon_environment)) },
+                    label = { Text(stringResource(R.string.tab_environment)) },
                 )
             }
         },
@@ -104,13 +107,13 @@ private fun PackagesScreen(state: UiState, viewModel: MainViewModel, modifier: M
             onValueChange = viewModel::setQuery,
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            label = { Text("搜索包名 / 描述") },
+            label = { Text(stringResource(R.string.search_hint)) },
         )
         Spacer(Modifier.height(6.dp))
         Text(
             text = state.message.ifEmpty {
-                "索引 ${state.packages.size} · 已安装 ${state.installed.size}" +
-                    if (state.repoVerified) " · 索引已验签" else ""
+                stringResource(R.string.status_summary, state.packages.size, state.installed.size) +
+                    if (state.repoVerified) stringResource(R.string.status_verified) else ""
             },
             style = MaterialTheme.typography.bodySmall,
         )
@@ -154,7 +157,7 @@ private fun PackageRow(
             )
             Text(
                 text = "${pkg.version} · ${pkg.architecture}" +
-                    if (installedVersion != null) " · 已安装" else "",
+                    if (installedVersion != null) stringResource(R.string.badge_installed) else "",
                 style = MaterialTheme.typography.bodySmall,
             )
             pkg.description?.lineSequence()?.firstOrNull()?.let {
@@ -169,8 +172,8 @@ private fun PackageRow(
         Spacer(Modifier.width(8.dp))
         when {
             installing -> CircularProgressIndicator(modifier = Modifier.size(24.dp))
-            installedVersion != null -> TextButton(onClick = onUninstall) { Text("卸载") }
-            else -> Button(onClick = onInstall) { Text("安装") }
+            installedVersion != null -> TextButton(onClick = onUninstall) { Text(stringResource(R.string.action_uninstall)) }
+            else -> Button(onClick = onInstall) { Text(stringResource(R.string.action_install)) }
         }
     }
 }
@@ -180,15 +183,18 @@ private fun EnvironmentScreen(state: UiState, viewModel: MainViewModel, modifier
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp)) {
-                Text("Root", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.root_section), style = MaterialTheme.typography.titleMedium)
                 val root = state.root
                 Text(
                     when {
-                        root == null -> "检测中…"
-                        root.granted -> "已授权" + if (root.managers.isEmpty()) "" else "（" +
-                            root.managers.joinToString { "${it.name} ${it.version.orEmpty()}" } + "）"
-                        root.managers.isEmpty() -> "未检测到 root 管理器"
-                        else -> "未授权：请在 " + root.managers.joinToString { it.name } + " 中授权"
+                        root == null -> stringResource(R.string.root_detecting)
+                        root.granted && root.managers.isEmpty() -> stringResource(R.string.root_granted)
+                        root.granted -> stringResource(
+                            R.string.root_granted_managers,
+                            root.managers.joinToString { "${it.name} ${it.version.orEmpty()}" },
+                        )
+                        root.managers.isEmpty() -> stringResource(R.string.root_no_manager)
+                        else -> stringResource(R.string.root_not_granted, root.managers.joinToString { it.name })
                     },
                     style = MaterialTheme.typography.bodyMedium,
                 )
@@ -197,37 +203,37 @@ private fun EnvironmentScreen(state: UiState, viewModel: MainViewModel, modifier
         Spacer(Modifier.height(12.dp))
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp)) {
-                Text("环境", style = MaterialTheme.typography.titleMedium)
-                Text("前缀：/data/adb/lb/usr", style = MaterialTheme.typography.bodySmall)
-                Text("已安装：${state.installed.size} 个包", style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.env_section), style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.env_prefix, LbPaths.PREFIX), style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.env_installed, state.installed.size), style = MaterialTheme.typography.bodySmall)
                 Text(
-                    "索引：" + if (state.repoVerified) "已验签" else "未验签",
+                    stringResource(if (state.repoVerified) R.string.env_index_verified else R.string.env_index_unverified),
                     style = MaterialTheme.typography.bodySmall,
                 )
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { viewModel.bootstrap() }) { Text("初始化前缀") }
-                    Button(onClick = { viewModel.updateRepo() }) { Text("更新索引") }
-                    TextButton(onClick = { viewModel.refreshInstalled() }) { Text("刷新") }
+                    Button(onClick = { viewModel.bootstrap() }) { Text(stringResource(R.string.action_init_prefix)) }
+                    Button(onClick = { viewModel.updateRepo() }) { Text(stringResource(R.string.action_update_index)) }
+                    TextButton(onClick = { viewModel.refreshInstalled() }) { Text(stringResource(R.string.action_refresh)) }
                 }
             }
         }
         Spacer(Modifier.height(12.dp))
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp)) {
-                Text("开发者选项", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.dev_section), style = MaterialTheme.typography.titleMedium)
                 SwitchRow(
-                    title = "强制授权签名",
+                    title = stringResource(R.string.dev_require_signature),
                     checked = state.requireSignature,
                     onCheckedChange = viewModel::setRequireSignature,
                 )
                 SwitchRow(
-                    title = "自动恶意检测",
+                    title = stringResource(R.string.dev_malware_scan),
                     checked = state.malwareScan,
                     onCheckedChange = viewModel::setMalwareScan,
                 )
                 Text(
-                    "关闭后仍执行结构校验；坏签名仍会拒绝。",
+                    stringResource(R.string.dev_note),
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
