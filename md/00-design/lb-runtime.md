@@ -337,7 +337,10 @@ ln -s /data/adb/lb/usr /data/data/com.termux/files/usr
 
 | 命令 | 说明 |
 |---|---|
-| `lb install [--allow-unsigned] [--skip-scan] <文件>` | 安装本地 deb / LBPA |
+| `lb install [--allow-unsigned] [--skip-scan] [--yes] <文件\|目录>` | 安装本地 deb / LBPA；目录自动规划依赖并二次确认 |
+| `lb verify <包>` | 校验 deb / LBPA 签名 |
+| `lb inspect <包>` | 查看格式、元数据、脚本、关系 |
+| `lb trust show / import <root.json> / remove` | 信任根管理 |
 | `lb upgrade [选项] <文件>` | 升降级（要求已安装） |
 | `lb remove [--force] <包>` / `lb purge <包>` | 卸载；默认保留数据 |
 | `lb list` | 已安装列表 |

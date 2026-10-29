@@ -17,6 +17,13 @@ class InstallOptionsTest {
     }
 
     @Test
+    fun parsesYesFlag() {
+        assertTrue(parseInstall(listOf("--yes", "dir")).getOrThrow().assumeYes)
+        assertTrue(parseInstall(listOf("-y", "dir")).getOrThrow().assumeYes)
+        assertFalse(parseInstall(listOf("dir")).getOrThrow().assumeYes)
+    }
+
+    @Test
     fun defaultsToStrictPolicy() {
         val options = parseInstall(listOf("hello.deb")).getOrThrow()
 

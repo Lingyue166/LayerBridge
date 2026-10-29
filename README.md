@@ -33,6 +33,10 @@ su -c 'lb doctor'
 
 ```bash
 su -c 'lb install --allow-unsigned /sdcard/pkg.deb'
+su -c 'lb install /sdcard/lbtest'          # 目录：自动算依赖、排序、二次确认
+su -c 'lb verify /sdcard/pkg.deb'          # 签名校验
+su -c 'lb inspect /sdcard/pkg.lbpa'        # 元数据
+su -c 'lb trust show'
 su -c 'lb list'
 su -c 'lb shell'
 su -c 'hello'

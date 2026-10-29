@@ -203,6 +203,17 @@ object Certificates {
      * 验证证书链。chain 为叶证书到中间证书（不含根）；root 为固定信任锚。
      * 返回签名证书。
      */
+    /** 信任根校验：自签名、CA、cert-signing、有效期。 */
+    fun validateRoot(cert: Certificate, now: Instant = Instant.now()): Result<Unit> {
+        if (!cert.verifySelf()) return Result.failure(IllegalArgumentException("根证书自签名无效"))
+        if (!cert.isWithin(now)) return Result.failure(IllegalArgumentException("根证书不在有效期"))
+        if (!cert.isCA) return Result.failure(IllegalArgumentException("根证书不是 CA"))
+        if (!cert.hasUsage("cert-signing")) {
+            return Result.failure(IllegalArgumentException("根证书缺少 cert-signing 用途"))
+        }
+        return Result.success(Unit)
+    }
+
     fun verifyChain(
         chain: List<Certificate>,
         root: Certificate,
