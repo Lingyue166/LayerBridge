@@ -17,6 +17,12 @@
 | [LBPA 载荷、安装与签名](00-design/lbpa-payload-signing.md) | §5–§9 payload、安装语义、兼容、deb 互操作、签名 |
 | [LBPA 安全约束与工具链](00-design/lbpa-tools.md) | §10–§13 安全约束、工具链、示例、待定项 |
 
+## 构建
+
+| 文档 | 结论 |
+|---|---|
+| [自建包计划](40-build/package-plan.md) | 官方源码 + NDK 编译，按基础库、工具链、CLI、音频、趣味分批；当前只整理不构建 |
+
 ## 决策
 
 | 文档 | 结论 |
