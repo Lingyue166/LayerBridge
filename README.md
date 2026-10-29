@@ -61,6 +61,8 @@ bash scripts/build-module.sh
 系统按设备语言自动选择；Android 13+ 可在应用信息里单独切换。
 `res/xml/locales_config.xml` 声明支持的语言。
 
+CLI 同样按 `Locale.getDefault()` 选中/英文（`cli/LbText.kt`）；安装器与 doctor 的技术日志仍为中文。
+
 ## 打包
 
 ```bash

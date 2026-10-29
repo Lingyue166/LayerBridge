@@ -59,50 +59,19 @@ object LbMain {
         "purge" -> remove(args.drop(1), forceByCommand = true)
         "update" -> pending(args.first())
         else -> {
-            System.err.println("未知命令：${args.first()}")
+            System.err.println(LbText.current(T.UNKNOWN_COMMAND, args.first() ?: ""))
             help()
             1
         }
     }
 
     private fun help(): Int {
-        println(
-            """
-            lb - LayerBridge package manager
-
-            用法：
-              lb                         同 lb help
-              lb cli                     进入交互模式（子命令与直接调用一致）
-              lb env                     打印环境变量
-              lb list                    列出已安装包
-              lb info <包名>             查看已安装包的元数据与关系
-              lb doctor                  自检（root、前缀、数据库、信任根）
-              lb shell                   进入带环境的 shell
-              lb exec <命令> [参数...]   以 root 用前缀环境执行一条命令
-              lb install [选项] <文件|目录> 安装本地 .deb / .lbpa；目录会解析依赖并排序
-                  --yes / -y              目录安装时跳过确认
-              lb upgrade [选项] <包文件>  升级/降级已安装包到任意版本（不要求相邻版本）
-                  --allow-unsigned        允许无签名包（仍需结构校验）
-                  --skip-scan             跳过维护脚本静态检测
-              lb expose-root [--remove] root shell 软链（默认开启，--remove 关闭）
-              lb verify <包>             校验签名（deb / LBPA）
-              lb inspect <包>            查看格式、元数据、脚本、关系
-              lb trust show             显示信任根
-              lb trust import <root.json> 导入信任根
-              lb trust remove           删除信任根
-                  --force / -f            连同数据、残留一起清除（同 lb purge）
-              lb purge <包名>            强制卸载（= lb remove --force）
-
-            示例：
-              su -c 'lb install /sdcard/hello.deb'
-              su -c 'lb cli'
-            """.trimIndent(),
-        )
+        println(LbText.current(T.HELP))
         return 0
     }
 
     private fun commandLoop(): Int {
-        println("lb 交互模式：直接输入子命令（install/remove/list/info/doctor/env/shell），exit 退出")
+        println(LbText.current(T.INTERACTIVE_HINT))
         while (true) {
             print("lb> ")
             System.out.flush()
@@ -122,7 +91,7 @@ object LbMain {
     private fun list(): Int = runBlocking {
         val packages = StatusDb(LocalStateStorage()).load()
         if (packages.isEmpty()) {
-            println("尚无已安装包")
+            println(LbText.current(T.NO_PACKAGES))
             return@runBlocking 0
         }
         packages.forEach { println("${it.name}\t${it.version}\t${it.format}") }
@@ -130,11 +99,11 @@ object LbMain {
     }
 
     private fun info(args: List<String>): Int {
-        if (args.size != 1) return usageError("用法：lb info <包名>")
+        if (args.size != 1) return usageError(LbText.current(T.USAGE_INFO))
         val name = args.single()
-        if (!PathGuard.isPackageName(name)) return fail("非法包名：$name")
+        if (!PathGuard.isPackageName(name)) return fail(LbText.current(T.ERR_BAD_NAME, name))
         return runBlocking {
-            val pkg = StatusDb(LocalStateStorage()).find(name) ?: return@runBlocking fail("未安装：$name")
+            val pkg = StatusDb(LocalStateStorage()).find(name) ?: return@runBlocking fail(LbText.current(T.NOT_INSTALLED, name))
             print(describe(pkg))
             0
         }
@@ -157,8 +126,8 @@ object LbMain {
     }
 
     private fun exec(args: List<String>): Int {
-        if (args.isEmpty()) return usageError("用法：lb exec <命令> [参数...]")
-        if (!isRoot()) return fail("需要 root：请使用 su 运行 lb")
+        if (args.isEmpty()) return usageError(LbText.current(T.USAGE_GENERIC, "lb exec <command> [args...]"))
+        if (!isRoot()) return fail(LbText.current(T.ERR_ROOT))
         val body = "exec " + args.joinToString(" ") { PathGuard.quote(it) }
         val env = mapOf(
             "PREFIX" to LbPaths.PREFIX,
@@ -188,10 +157,10 @@ object LbMain {
 
     private fun install(args: List<String>, requireInstalled: Boolean): Int {
         val options = parseInstall(args).getOrElse { return usageError(it.message.orEmpty()) }
-        if (!isRoot()) return fail("需要 root：请使用 su 运行 lb")
+        if (!isRoot()) return fail(LbText.current(T.ERR_ROOT))
         val file = File(options.path)
         if (file.isDirectory) return installDirectory(file, options, requireInstalled)
-        if (!file.isFile) return fail("文件不存在：${file.path}")
+        if (!file.isFile) return fail(LbText.current(T.ERR_NOT_FOUND, file.path))
 
         return runBlocking {
             val policy = policyOf(options)
@@ -202,46 +171,46 @@ object LbMain {
 
     /** 目录安装：解析目录内包、算依赖与冲突、排序，确认后逐个安装。 */
     private fun installDirectory(dir: File, options: InstallOptions, requireInstalled: Boolean): Int {
-        if (requireInstalled) return fail("upgrade 只接受单个包文件")
+        if (requireInstalled) return fail(LbText.current(T.UPGRADE_SINGLE))
         val files = dir.listFiles { f -> f.isFile && (f.name.endsWith(".deb", true) || f.name.endsWith(".lbpa", true)) }
             ?.sortedBy { it.name }
             .orEmpty()
-        if (files.isEmpty()) return fail("目录内没有 .deb / .lbpa：${dir.path}")
+        if (files.isEmpty()) return fail(LbText.current(T.DIR_EMPTY, dir.path))
 
         val packages = mutableListOf<LocalPackage>()
         for (f in files) {
-            val pkg = readLocalPackage(f) ?: return fail("无法解析：${f.name}")
+            val pkg = readLocalPackage(f) ?: return fail(LbText.current(T.ERR_PARSE, f.name))
             packages += pkg
         }
 
         return runBlocking {
             val installed = StatusDb(LocalStateStorage()).load().associate { it.name to it.version }
             val plan = LocalPlanner.plan(packages, installed)
-            plan.cycle?.let { return@runBlocking fail("依赖存在环：$it") }
+            plan.cycle?.let { return@runBlocking fail(LbText.current(T.CYCLE, it)) }
             if (plan.missing.isNotEmpty()) {
-                println("缺失依赖：")
+                println(LbText.current(T.MISSING_HEADER))
                 plan.missing.forEach { println("  $it") }
                 return@runBlocking 1
             }
             if (plan.conflicts.isNotEmpty()) {
-                println("存在冲突：")
+                println(LbText.current(T.CONFLICT_HEADER))
                 plan.conflicts.forEach { println("  $it") }
                 return@runBlocking 1
             }
 
-            println("安装计划（${plan.order.size} 个包）：")
+            println(LbText.current(T.PLAN_HEADER, plan.order.size))
             plan.order.forEachIndexed { index, pkg ->
-                println("  ${index + 1}. ${pkg.name} ${pkg.version} (${pkg.format})")
+                println(LbText.current(T.PLAN_ITEM, index + 1, pkg.name, pkg.version, pkg.format))
             }
             if (!options.assumeYes && !confirm("继续安装？")) {
-                println("已取消")
+                println(LbText.current(T.CANCELLED))
                 return@runBlocking 1
             }
 
             val policy = policyOf(options)
             val prepared = prepareInstaller(policy) ?: return@runBlocking 1
             for (pkg in plan.order) {
-                println("[lb] 安装 ${pkg.name} ${pkg.version}")
+                println(LbText.current(T.INSTALLING, pkg.name, pkg.version))
                 val code = installOne(prepared, pkg.path, policy, requireInstalled = false)
                 if (code != 0) return@runBlocking code
             }
@@ -255,7 +224,7 @@ object LbMain {
     private suspend fun prepareInstaller(policy: InstallPolicy): LinuxInstaller? {
         val installer = createInstaller()
         installer.bootstrap().onFailure {
-            System.err.println("lb: 初始化前缀失败：${it.message}")
+            System.err.println("lb: " + LbText.current(T.ERR_PREFIX_INIT, it.message.orEmpty()))
             return null
         }
         return installer
@@ -272,11 +241,11 @@ object LbMain {
                 installer.installDeb(file, LOCAL_REPO, false, policy, requireInstalled) { println(it) }
             file.name.endsWith(".lbpa", ignoreCase = true) ->
                 installer.installLbpa(file, LOCAL_REPO, false, policy, requireInstalled) { println(it) }
-            else -> return fail("无法识别包类型（需要 .deb 或 .lbpa）：${file.name}")
+            else -> return fail(LbText.current(T.ERR_UNKNOWN_TYPE, file.name))
         }
         return result.fold(
-            onSuccess = { println("[lb] 安装完成：${it.name} ${it.version}"); 0 },
-            onFailure = { println("[lb] 安装失败：${it.message}"); 1 },
+            onSuccess = { println(LbText.current(T.INSTALL_DONE, it.name, it.version)); 0 },
+            onFailure = { println(LbText.current(T.INSTALL_FAILED_ITEM, it.message.orEmpty())); 1 },
         )
     }
 
@@ -327,54 +296,54 @@ object LbMain {
     private fun remove(args: List<String>, forceByCommand: Boolean): Int {
         val options = parseRemove(args).getOrElse { return usageError(it.message.orEmpty()) }
         val name = options.name
-        if (!PathGuard.isPackageName(name)) return fail("非法包名：$name")
-        if (!isRoot()) return fail("需要 root：请使用 su 运行 lb")
+        if (!PathGuard.isPackageName(name)) return fail(LbText.current(T.ERR_BAD_NAME, name))
+        if (!isRoot()) return fail(LbText.current(T.ERR_ROOT))
         val force = forceByCommand || options.force
 
         return runBlocking {
             createInstaller().uninstall(name, force) { println(it) }.fold(
-                onSuccess = { println("[lb] 已卸载 $name"); 0 },
-                onFailure = { println("[lb] 卸载失败：${it.message}"); 1 },
+                onSuccess = { println(LbText.current(T.REMOVED, name)); 0 },
+                onFailure = { println(LbText.current(T.ERR_UNINSTALL_FAILED, it.message.orEmpty())); 1 },
             )
         }
     }
 
     private fun exposeRoot(args: List<String>): Int {
-        if (!isRoot()) return fail("需要 root：请使用 su 运行 lb")
+        if (!isRoot()) return fail(LbText.current(T.ERR_ROOT))
         val remove = args.firstOrNull() == "--remove"
-        if (args.isNotEmpty() && !remove) return usageError("用法：lb expose-root [--remove]")
+        if (args.isNotEmpty() && !remove) return usageError(LbText.current(T.USAGE_EXPOSE))
         return runBlocking {
             createInstaller().setRootExposure(!remove) { println(it) }.fold(
                 onSuccess = { 0 },
-                onFailure = { fail("操作失败：${it.message}") },
+                onFailure = { fail(LbText.current(T.OPERATION_FAILED, it.message.orEmpty())) },
             )
         }
     }
 
     private fun verifyPackage(args: List<String>): Int {
-        val path = args.singleOrNull() ?: return usageError("用法：lb verify <包>")
+        val path = args.singleOrNull() ?: return usageError(LbText.current(T.USAGE_VERIFY))
         val file = File(path)
-        if (!file.isFile) return fail("文件不存在：$path")
+        if (!file.isFile) return fail(LbText.current(T.ERR_NOT_FOUND, path))
         val trust = TrustStore(File(LbPaths.TRUST_DIR))
         return when {
             LbpaFile.isLbpa(file) -> verifyLbpa(file, trust)
             DebFile.isDeb(file) -> verifyDeb(file, trust)
-            else -> fail("无法识别包格式：${file.name}")
+            else -> fail(LbText.current(T.ERR_UNKNOWN_TYPE, file.name))
         }
     }
 
     private fun verifyDeb(file: File, trust: TrustStore): Int {
         val sidecar = File(file.parentFile, file.name + ".sig")
         if (!sidecar.isFile) {
-            println("未签名：没有 ${sidecar.name}")
+            println(LbText.current(T.SIGN_UNSIGNED_DEB, sidecar.name))
             return 1
         }
-        val root = trust.loadRoot() ?: return fail("未配置信任根：${LbPaths.TRUST_DIR}/root.json")
-        val name = DebFile(file).readControl().packageName ?: return fail("control 缺少 Package")
+        val root = trust.loadRoot() ?: return fail(LbText.current(T.ERR_NO_TRUST_ROOT, "${LbPaths.TRUST_DIR}/root.json"))
+        val name = DebFile(file).readControl().packageName ?: return fail(LbText.current(T.CONTROL_MISSING))
         val block = PackageSigner.parseBlock(sidecar.readText(Charsets.UTF_8))
         return PackageSigner.verifyDeb(block, PackageSigner.sha256File(file), root, name).fold(
-            onSuccess = { println("签名有效：${it.subject}"); println("有效期：${it.notBefore} → ${it.notAfter}"); 0 },
-            onFailure = { println("签名无效：${it.message}"); 1 },
+            onSuccess = { println(LbText.current(T.SIGN_VALID, it.subject)); println(LbText.current(T.SIGN_VALIDITY, it.notBefore, it.notAfter)); 0 },
+            onFailure = { println(LbText.current(T.SIGN_INVALID, it.message.orEmpty())); 1 },
         )
     }
 
@@ -382,25 +351,25 @@ object LbMain {
         val parsed = LbpaFile.parse(file)
         val signature = parsed.signatureJson
         if (signature == null) {
-            println("未签名：LBPA 无签名 footer")
+            println(LbText.current(T.SIGN_UNSIGNED_LBPA))
             return 1
         }
-        val root = trust.loadRoot() ?: return fail("未配置信任根：${LbPaths.TRUST_DIR}/root.json")
+        val root = trust.loadRoot() ?: return fail(LbText.current(T.ERR_NO_TRUST_ROOT, "${LbPaths.TRUST_DIR}/root.json"))
         val block = PackageSigner.parseBlock(signature)
         return PackageSigner.verifyLbpa(block, parsed.manifestBytes, parsed.payloadSha256(), root, parsed.packageName).fold(
-            onSuccess = { println("签名有效：${it.subject}"); println("有效期：${it.notBefore} → ${it.notAfter}"); 0 },
-            onFailure = { println("签名无效：${it.message}"); 1 },
+            onSuccess = { println(LbText.current(T.SIGN_VALID, it.subject)); println(LbText.current(T.SIGN_VALIDITY, it.notBefore, it.notAfter)); 0 },
+            onFailure = { println(LbText.current(T.SIGN_INVALID, it.message.orEmpty())); 1 },
         )
     }
 
     private fun inspectPackage(args: List<String>): Int {
-        val path = args.singleOrNull() ?: return usageError("用法：lb inspect <包>")
+        val path = args.singleOrNull() ?: return usageError(LbText.current(T.USAGE_INSPECT))
         val file = File(path)
-        if (!file.isFile) return fail("文件不存在：$path")
+        if (!file.isFile) return fail(LbText.current(T.ERR_NOT_FOUND, path))
         return when {
             LbpaFile.isLbpa(file) -> inspectLbpa(file)
             DebFile.isDeb(file) -> inspectDeb(file)
-            else -> fail("无法识别包格式：${file.name}")
+            else -> fail(LbText.current(T.ERR_UNKNOWN_TYPE, file.name))
         }
     }
 
@@ -456,45 +425,45 @@ object LbMain {
             "show" -> trustShow()
             "import" -> trustImport(args.drop(1))
             "remove" -> trustRemove()
-            else -> usageError("用法：lb trust show | import <root.json> | remove")
+            else -> usageError(LbText.current(T.USAGE_TRUST))
         }
     }
 
     private fun trustShow(): Int {
         val root = TrustStore(File(LbPaths.TRUST_DIR)).loadRoot()
         if (root == null) {
-            println("未配置信任根：${LbPaths.TRUST_DIR}/root.json")
+            println(LbText.current(T.TRUST_EMPTY, "${LbPaths.TRUST_DIR}/root.json"))
             return 1
         }
-        println("Subject: ${root.subject}")
-        println("KeyId: ${root.keyId}")
-        println("Valid: ${root.notBefore} → ${root.notAfter}")
-        println("CA: ${root.isCA}  Usages: ${root.usages.joinToString(", ")}")
+        println(LbText.current(T.TRUST_SUBJECT, root.subject))
+        println(LbText.current(T.TRUST_KEYID, root.keyId))
+        println(LbText.current(T.TRUST_VALID, root.notBefore, root.notAfter))
+        println(LbText.current(T.TRUST_CA, root.isCA.toString(), root.usages.joinToString(", ")))
         return 0
     }
 
     private fun trustImport(args: List<String>): Int {
         val path = args.singleOrNull() ?: return usageError("用法：lb trust import <root.json>")
-        if (!isRoot()) return fail("需要 root：请使用 su 运行 lb")
+        if (!isRoot()) return fail(LbText.current(T.ERR_ROOT))
         val file = File(path)
-        if (!file.isFile) return fail("文件不存在：$path")
+        if (!file.isFile) return fail(LbText.current(T.ERR_NOT_FOUND, path))
         val cert = runCatching { Gson().fromJson(file.readText(Charsets.UTF_8), Certificate::class.java) }
-            .getOrElse { return fail("解析失败：${it.message}") }
-        Certificates.validateRoot(cert).getOrElse { return fail("不是可用的信任根：${it.message}") }
+            .getOrElse { return fail(LbText.current(T.ERR_PARSE, it.message.orEmpty())) }
+        Certificates.validateRoot(cert).getOrElse { return fail(LbText.current(T.ERR_TRUST_INVALID, it.message.orEmpty())) }
         val result = runBlocking {
             Shell.writeFile("${LbPaths.TRUST_DIR}/root.json", Gson().toJson(cert), "600")
         }
-        if (!result.isSuccess) return fail("写入失败：${result.output}")
-        println("已导入信任根：${cert.subject}")
-        println("KeyId: ${cert.keyId}")
+        if (!result.isSuccess) return fail(LbText.current(T.ERR_TRUST_WRITE, result.output))
+        println(LbText.current(T.TRUST_IMPORTED, cert.subject))
+        println(LbText.current(T.TRUST_KEYID, cert.keyId))
         return 0
     }
 
     private fun trustRemove(): Int {
-        if (!isRoot()) return fail("需要 root：请使用 su 运行 lb")
+        if (!isRoot()) return fail(LbText.current(T.ERR_ROOT))
         val result = runBlocking { Shell.exec("rm -f ${PathGuard.quote("${LbPaths.TRUST_DIR}/root.json")}") }
-        if (!result.isSuccess) return fail("删除失败：${result.output}")
-        println("已删除信任根")
+        if (!result.isSuccess) return fail(LbText.current(T.ERR_TRUST_DELETE, result.output))
+        println(LbText.current(T.TRUST_DELETED))
         return 0
     }
 
@@ -531,7 +500,7 @@ object LbMain {
     }
 
     private fun pending(command: String): Int {
-        System.err.println("lb $command：暂未实现。")
+        System.err.println(LbText.current(T.PENDING, command))
         return 1
     }
 
@@ -573,14 +542,14 @@ internal fun parseRemove(args: List<String>, forceByDefault: Boolean = false): R
         when (arg) {
             "--force", "-f", "--purge" -> force = true
             else -> if (arg.startsWith("-")) {
-                return Result.failure(IllegalArgumentException("未知参数：$arg"))
+                return Result.failure(IllegalArgumentException(LbText.current(T.UNKNOWN_ARG, arg)))
             } else {
                 targets += arg
             }
         }
     }
     if (targets.size != 1) {
-        return Result.failure(IllegalArgumentException("用法：lb remove [--force] <包名>"))
+        return Result.failure(IllegalArgumentException(LbText.current(T.USAGE_REMOVE)))
     }
     return Result.success(RemoveOptions(targets.single(), force))
 }
@@ -604,14 +573,14 @@ internal fun parseInstall(args: List<String>): Result<InstallOptions> {
             "--skip-scan" -> skipScan = true
             "--yes", "-y" -> assumeYes = true
             else -> if (arg.startsWith("-")) {
-                return Result.failure(IllegalArgumentException("未知参数：$arg"))
+                return Result.failure(IllegalArgumentException(LbText.current(T.UNKNOWN_ARG, arg)))
             } else {
                 targets += arg
             }
         }
     }
     if (targets.size != 1) {
-        return Result.failure(IllegalArgumentException("用法：lb install [选项] <文件|目录>"))
+        return Result.failure(IllegalArgumentException(LbText.current(T.USAGE_INSTALL)))
     }
     return Result.success(InstallOptions(targets.single(), allowUnsigned, skipScan, assumeYes))
 }
