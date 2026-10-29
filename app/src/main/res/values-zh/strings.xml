@@ -55,4 +55,5 @@
     <string name="language_zh">中文</string>
     <string name="language_en">English</string>
     <string name="msg_busy">已有安装任务在运行，请稍后再试</string>
+    <string name="msg_no_repo">未配置软件源</string>
 </resources>

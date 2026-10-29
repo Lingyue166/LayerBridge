@@ -16,6 +16,8 @@ class WrapperTest {
         assertTrue(script.contains("export PATH=\"\$LB_PREFIX/bin:\$LB_PREFIX/sbin:\$PATH\""))
         assertTrue(script.contains("HELLO_HOME='${LbPaths.PREFIX}/share/hello'"))
         assertTrue(script.contains("exec \"\$LB_PREFIX/bin/hello\" \"\$@\""))
+        assertTrue(script.contains("GIT_EXEC_PATH"))
+        assertTrue(script.contains("GIT_TEMPLATE_DIR"))
     }
 
     @Test

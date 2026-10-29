@@ -53,7 +53,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val statusDb = StatusDb(RootStateStorage())
     private val trustStore = TrustStore(File(application.filesDir, "trust"))
     private val installer = LinuxInstaller(statusDb, trustStore)
-    private val repo = RepoConfig.termux
+    // 默认不接任何外部源；自建源就绪后在这里配置。
+    private val repo: RepoConfig? = null
     private val repoClient = RepoClient(File(application.cacheDir, "repo")) { asset ->
         runCatching { application.assets.open(asset).readBytes() }.getOrNull()
     }
@@ -142,6 +143,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun updateRepo() {
+        val repo = repo ?: run {
+            _state.update { it.copy(message = str(R.string.msg_no_repo)) }
+            return
+        }
         viewModelScope.launch {
             _state.update { it.copy(loading = true, message = str(R.string.msg_index_updating)) }
             val result = repoClient.updateIndex(repo)
@@ -199,6 +204,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private suspend fun installPlan(plan: List<RepoPackage>) {
+        val repo = repo ?: run {
+            _state.update { it.copy(message = str(R.string.msg_no_repo)) }
+            return
+        }
         val policy = InstallPolicy(
             requireSignature = _state.value.requireSignature,
             malwareScan = _state.value.malwareScan,

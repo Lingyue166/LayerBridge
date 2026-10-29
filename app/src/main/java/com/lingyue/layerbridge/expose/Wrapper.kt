@@ -30,6 +30,9 @@ object Wrapper {
             appendLine("$TARGET_PREFIX$commandPath")
             append(EnvFile.render())
             envLines.forEach { appendLine(it) }
+            // git 这类工具把 libexec/share 路径编译死成 Termux 前缀，按实际目录补上
+            appendLine("if [ -d \"\$LB_PREFIX/libexec/git-core\" ]; then export GIT_EXEC_PATH=\"\$LB_PREFIX/libexec/git-core\"; fi")
+            appendLine("if [ -d \"\$LB_PREFIX/share/git-core/templates\" ]; then export GIT_TEMPLATE_DIR=\"\$LB_PREFIX/share/git-core/templates\"; fi")
             appendLine("exec \"\$LB_PREFIX/${commandPath}\" \"\$@\"")
         }
     }
