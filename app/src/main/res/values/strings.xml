@@ -49,4 +49,9 @@
     <string name="msg_uninstalling">Uninstalling %1$s</string>
     <string name="msg_uninstalled">Uninstalled %1$s</string>
     <string name="msg_uninstall_failed">Uninstall failed: %1$s</string>
+
+    <string name="language_section">Language</string>
+    <string name="language_system">Follow system</string>
+    <string name="language_zh">中文</string>
+    <string name="language_en">English</string>
 </resources>

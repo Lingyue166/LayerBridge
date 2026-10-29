@@ -19,6 +19,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -38,6 +39,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
@@ -215,6 +217,31 @@ private fun EnvironmentScreen(state: UiState, viewModel: MainViewModel, modifier
                     Button(onClick = { viewModel.bootstrap() }) { Text(stringResource(R.string.action_init_prefix)) }
                     Button(onClick = { viewModel.updateRepo() }) { Text(stringResource(R.string.action_update_index)) }
                     TextButton(onClick = { viewModel.refreshInstalled() }) { Text(stringResource(R.string.action_refresh)) }
+                }
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp)) {
+                Text(stringResource(R.string.language_section), style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(8.dp))
+                val context = LocalContext.current
+                val current = LocaleHelper.storedTag(context)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(
+                        LocaleHelper.SYSTEM to R.string.language_system,
+                        "zh" to R.string.language_zh,
+                        "en" to R.string.language_en,
+                    ).forEach { (tag, label) ->
+                        FilterChip(
+                            selected = current == tag,
+                            onClick = {
+                                LocaleHelper.save(context, tag)
+                                LocaleHelper.activityOf(context)?.recreate()
+                            },
+                            label = { Text(stringResource(label)) },
+                        )
+                    }
                 }
             }
         }

@@ -49,4 +49,9 @@
     <string name="msg_uninstalling">正在卸载 %1$s</string>
     <string name="msg_uninstalled">已卸载 %1$s</string>
     <string name="msg_uninstall_failed">卸载失败：%1$s</string>
+
+    <string name="language_section">语言</string>
+    <string name="language_system">跟随系统</string>
+    <string name="language_zh">中文</string>
+    <string name="language_en">English</string>
 </resources>

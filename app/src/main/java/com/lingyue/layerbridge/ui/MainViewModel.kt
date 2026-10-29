@@ -85,7 +85,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun str(id: Int, vararg args: Any): String =
-        getApplication<Application>().getString(id, *args)
+        LocaleHelper.wrap(getApplication()).getString(id, *args)
 
     fun clearLog() = _state.update { it.copy(log = "") }
 
