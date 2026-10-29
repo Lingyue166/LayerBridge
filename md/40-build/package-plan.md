@@ -2,7 +2,7 @@
 
 | 项目 | 内容 |
 |---|---|
-| 状态 | 阶段 0、1 已构建；其余待构建 |
+| 状态 | 阶段 0、1、5 已构建；阶段 2/3 部分完成；阶段 4 未开始 |
 | 更新日期 | 2026-10-29 |
 | 关联决策 | 自建源替代 Termux 源 |
 
@@ -88,6 +88,11 @@
 
 ## 阶段 3：常用 CLI 与系统工具
 
+已构建（`lb-pkgs/`）：tar 1.35、gzip 1.13、bzip2 1.0.8、unzip 6.0、zip 3.0、7zip 26.05、less 668、tree 2.2.1、fzf 0.74.5、htop 3.3.0、tmux 3.5a、ncdu 1.21、libevent 2.1.12、curl 8.23.0、git 2.56.0、tcpdump 4.99.5、nftables 1.1.1、iptables 1.8.11、libpcap 1.10.5、libmnl 1.0.5、libnftnl 1.2.8。
+
+剩余：wget、yq、lsof、strace、ufw（需 python3）。
+
+
 | 包 | 用途 | 依赖 |
 |---|---|---|
 | curl | HTTP 客户端 | openssl、nghttp2、zlib |
@@ -123,7 +128,10 @@ Android 上防火墙受 SELinux 和 netfilter 配置限制，先打包，能否�
 | cava | 音频可视化 | ncurses、fftw、pulseaudio? | 需要音频输入，Android 上可能受限 |
 | mpv | 播放器 | ffmpeg、SDL | 依赖重，可选 |
 
-## 阶段 5：趣味小工具
+## 阶段 5：趣味小工具（已构建）
+
+figlet 2.2.5、sl 5.05、fortune 3.26.1、cmatrix 2.0、cowsay 3.04（脚本，需 perl）、lolcat 1.5（C 实现）。
+
 
 | 包 | 用途 |
 |---|---|
