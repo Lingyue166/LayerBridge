@@ -96,7 +96,8 @@ def open_tar(name: str, body: bytes) -> tarfile.TarFile:
 
 def add_entry(tar: tarfile.TarFile, name: str, info: tarfile.TarInfo | None = None,
               data: bytes | None = None) -> None:
-    ti = tarfile.TarInfo(name)
+    is_dir = name.endswith("/")
+    ti = tarfile.TarInfo(name.rstrip("/") if is_dir else name)
     ti.mtime = int(datetime.now().timestamp())
     if info is not None:
         ti.type = info.type
@@ -108,6 +109,7 @@ def add_entry(tar: tarfile.TarFile, name: str, info: tarfile.TarInfo | None = No
         if info.islnk():
             ti.linkname = info.linkname
     else:
+        ti.type = tarfile.DIRTYPE if is_dir else tarfile.REGTYPE
         ti.mode = 0o755
     if data is not None:
         ti.size = len(data)
@@ -143,13 +145,14 @@ def build_payload_from_deb(deb: Path) -> tuple[bytes, dict]:
         for base, body in scripts.items():
             add_entry(out, f"control/{base}", data=body)
         for m, body in files:
+            is_dir_entry = m.isdir() or m.name.endswith("/")
             rel = m.name
             while rel.startswith("./"):
                 rel = rel[2:]
             rel = rel.rstrip("/")
             if not rel:
                 continue
-            if m.isdir():
+            if is_dir_entry:
                 add_entry(out, f"files/{rel}/")
             elif m.issym():
                 ti = tarfile.TarInfo(f"files/{rel}")
