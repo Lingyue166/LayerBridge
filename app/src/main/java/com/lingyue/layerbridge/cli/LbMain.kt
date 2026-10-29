@@ -210,6 +210,11 @@ object LbMain {
             val policy = policyOf(options)
             val prepared = prepareInstaller(policy) ?: return@runBlocking 1
             for (pkg in plan.order) {
+                val existing = installed[pkg.name]
+                if (existing != null) {
+                    println("[lb] 跳过已安装：${pkg.name} ${existing}（升级用 lb upgrade）")
+                    continue
+                }
                 println(LbText.current(T.INSTALLING, pkg.name, pkg.version))
                 val code = installOne(prepared, pkg.path, policy, requireInstalled = false)
                 if (code != 0) return@runBlocking code
