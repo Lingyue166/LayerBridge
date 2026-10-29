@@ -2,12 +2,14 @@ package com.lingyue.layerbridge.crypto
 
 import org.bouncycastle.openpgp.PGPCompressedData
 import org.bouncycastle.openpgp.PGPObjectFactory
+import org.bouncycastle.openpgp.PGPUtil
 import org.bouncycastle.openpgp.PGPPublicKey
 import org.bouncycastle.openpgp.PGPPublicKeyRingCollection
 import org.bouncycastle.openpgp.PGPSignatureList
 import org.bouncycastle.openpgp.jcajce.JcaPGPObjectFactory
 import org.bouncycastle.openpgp.operator.jcajce.JcaKeyFingerprintCalculator
 import org.bouncycastle.openpgp.operator.jcajce.JcaPGPContentVerifierBuilderProvider
+import java.io.ByteArrayInputStream
 
 /** apt 仓库的 OpenPGP 分离签名验证（Release.gpg / InRelease）。 */
 object OpenPgpVerifier {
@@ -39,7 +41,8 @@ object OpenPgpVerifier {
     }
 
     private fun readSignatureList(signature: ByteArray): PGPSignatureList {
-        var factory: PGPObjectFactory = JcaPGPObjectFactory(signature)
+        // apt 的 Release.gpg 可能是 ASCII armor，也可能是二进制；PGPUtil 两者都能解码。
+        var factory: PGPObjectFactory = JcaPGPObjectFactory(PGPUtil.getDecoderStream(ByteArrayInputStream(signature)))
         var obj = factory.nextObject()
         if (obj is PGPCompressedData) {
             factory = JcaPGPObjectFactory(obj.dataStream)

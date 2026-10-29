@@ -1,5 +1,6 @@
 package com.lingyue.layerbridge.crypto
 
+import org.bouncycastle.bcpg.ArmoredOutputStream
 import org.bouncycastle.bcpg.HashAlgorithmTags
 import org.bouncycastle.openpgp.PGPPublicKey
 import org.bouncycastle.openpgp.PGPPublicKeyRing
@@ -44,6 +45,13 @@ class OpenPgpVerifierTest {
             OpenPgpVerifier.verifyDetached(
                 "tampered".toByteArray(), signatureBytes, ringBytes, fingerprint,
             ).isFailure,
+        )
+
+        val armored = ByteArrayOutputStream().also { out ->
+            ArmoredOutputStream(out).use { signature.encode(it) }
+        }.toByteArray()
+        assertTrue(
+            OpenPgpVerifier.verifyDetached(content, armored, ringBytes, fingerprint).isSuccess,
         )
         assertTrue(
             OpenPgpVerifier.verifyDetached(content, signatureBytes, ringBytes, "00").isFailure,
