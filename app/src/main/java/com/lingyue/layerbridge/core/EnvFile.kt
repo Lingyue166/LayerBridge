@@ -14,7 +14,8 @@ object EnvFile {
         appendLine("export PREFIX=\"\$LB_PREFIX\"")
         appendLine("case \":\$PATH:\" in *\":\$LB_PREFIX/bin:\"*) ;; *) export PATH=\"\$LB_PREFIX/bin:\$LB_PREFIX/sbin:\$PATH\" ;; esac")
         appendLine("export LD_LIBRARY_PATH=\"\$LB_PREFIX/lib\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}\"")
-        appendLine("export HOME=\"\${HOME:-${LbPaths.HOME}}\"")
+        // root shell 的 HOME 常常是 "/"（不可写），这种情况下回落到前缀 home
+        appendLine("if [ -z \"\${HOME:-}\" ] || [ \"\$HOME\" = \"/\" ]; then export HOME=${PathGuard.quote(LbPaths.HOME)}; fi")
         appendLine("export TMPDIR=\"\$LB_PREFIX/tmp\"")
     }
 }
