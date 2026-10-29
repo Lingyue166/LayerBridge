@@ -2,6 +2,7 @@ package com.lingyue.layerbridge.crypto
 
 import com.google.gson.Gson
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.io.File
 import java.security.PrivateKey
@@ -50,7 +51,8 @@ class SigningFixtureTest {
 
         val debs = debDir.listFiles { f -> f.isFile && f.name.endsWith(".deb") && !f.name.contains("unsigned") }
             .orEmpty()
-        assertTrue("build/testdeb 下没有可签名包", debs.isNotEmpty())
+        // 这是本地签名夹具生成器，不依赖仓库内文件；没有测试包时跳过而不是失败。
+        assumeTrue("build/testdeb 下没有可签名包", debs.isNotEmpty())
 
         val now = Instant.now()
         debs.forEach { deb ->
