@@ -21,6 +21,12 @@ class LbTextTest {
     }
 
     @Test
+    fun loadsLanguageFiles() {
+        assertTrue(LbText.table("zh")[T.HELP]!!.contains("包管理器"))
+        assertTrue(LbText.table("en")[T.HELP]!!.contains("package manager"))
+    }
+
+    @Test
     fun formatsPlaceholders() {
         assertEquals("  1. jq 1.0 (deb)", LbText.get("en", T.PLAN_ITEM, 1, "jq", "1.0", "deb"))
         assertEquals("  2. lua 5.4 (lbpa)", LbText.get("en", T.PLAN_ITEM, 2, "lua", "5.4", "lbpa"))

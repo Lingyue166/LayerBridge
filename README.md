@@ -62,7 +62,7 @@ bash scripts/build-module.sh
 `res/xml/locales_config.xml` 声明支持的语言。
 
 App 内「环境 → 语言」可选中/英/跟随系统，选择存 `lb_settings`，切换后重建 Activity。
-CLI 按进程的 `Locale.getDefault()` 选中/英文（`cli/LbText.kt`），不读 App 内设置；安装器与 doctor 的技术日志仍为中文。
+CLI 按进程的 `Locale.getDefault()` 选中/英文，文案在 `app/src/main/resources/i18n/cli_zh.properties` 与 `cli_en.properties`（`cli/LbText.kt` 只负责加载），不读 App 内设置；安装器与 doctor 的技术日志仍为中文。
 
 ## 打包
 
