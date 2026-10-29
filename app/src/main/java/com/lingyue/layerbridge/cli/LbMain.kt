@@ -117,7 +117,7 @@ object LbMain {
         println("trust: ${File("${LbPaths.TRUST_DIR}/root.json").isFile}")
         println("expose: ${if (File(LbPaths.EXPOSE_FLAG).isFile) "system（命令暴露到 /system/bin，可被检测）" else "stealth（仅 root 可见）"}")
         println("前缀权限: ${lsLine(LbPaths.BASE)}")
-        println("overlay: ${if (overlayMounted()) "已挂载（可被检测）" else "未挂载"}")
+        println("overlay: ${if (overlayMounted()) LbText.current(T.OVERLAY_MOUNTED) else LbText.current(T.OVERLAY_NONE)}")
         println("root-links: ${rootLinkCount()} 个（lb expose-root --remove 可关闭）")
         println("module: ${File(LbPaths.MODULE_DIR).isDirectory}")
         println("apk: ${File("${LbPaths.BASE}/lb.apk").isFile}")
@@ -388,7 +388,7 @@ object LbMain {
         control.breaks?.let { println("Breaks: $it") }
         println("Scripts: ${control.scripts.keys.sorted().joinToString(", ").ifEmpty { "-" }}")
         control.conffiles.takeIf { it.isNotEmpty() }?.let { println("Conffiles: ${it.joinToString(", ")}") }
-        println("Signature: ${if (File(file.parentFile, file.name + ".sig").isFile) "有 .sig" else "无 .sig"}")
+        println("Signature: ${if (File(file.parentFile, file.name + ".sig").isFile) LbText.current(T.SIGNED_YES) + " .sig" else LbText.current(T.SIGNED_NO) + " .sig"}")
         return 0
     }
 
@@ -416,7 +416,7 @@ object LbMain {
             up.remove?.takeIf { it.isNotEmpty() }?.let { println("UpgradeRemove: ${it.joinToString(", ")}") }
         }
         manifest.data?.takeIf { it.isNotEmpty() }?.let { println("Data: ${it.joinToString(", ")}") }
-        println("Signature: ${if (parsed.signatureJson != null) "有" else "无"}")
+        println("Signature: ${if (parsed.signatureJson != null) LbText.current(T.SIGNED_YES) else LbText.current(T.SIGNED_NO)}")
         return 0
     }
 
@@ -443,7 +443,7 @@ object LbMain {
     }
 
     private fun trustImport(args: List<String>): Int {
-        val path = args.singleOrNull() ?: return usageError("用法：lb trust import <root.json>")
+        val path = args.singleOrNull() ?: return usageError(LbText.current(T.USAGE_TRUST_IMPORT))
         if (!isRoot()) return fail(LbText.current(T.ERR_ROOT))
         val file = File(path)
         if (!file.isFile) return fail(LbText.current(T.ERR_NOT_FOUND, path))

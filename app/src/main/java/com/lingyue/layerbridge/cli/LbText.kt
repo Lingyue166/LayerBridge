@@ -60,6 +60,11 @@ internal enum class T {
     OPERATION_FAILED,
     INTERACTIVE_HINT,
     UNKNOWN_ARG,
+    OVERLAY_MOUNTED,
+    OVERLAY_NONE,
+    SIGNED_YES,
+    SIGNED_NO,
+    USAGE_TRUST_IMPORT,
 }
 
 internal object LbText {
@@ -147,6 +152,11 @@ internal object LbText {
         T.OPERATION_FAILED to "操作失败：%s",
         T.INTERACTIVE_HINT to "lb 交互模式：直接输入子命令（install/remove/list/info/doctor/env/shell），exit 退出",
         T.UNKNOWN_ARG to "未知参数：%s",
+        T.OVERLAY_MOUNTED to "已挂载（可被检测）",
+        T.OVERLAY_NONE to "未挂载",
+        T.SIGNED_YES to "有",
+        T.SIGNED_NO to "无",
+        T.USAGE_TRUST_IMPORT to "用法：lb trust import <root.json>",
     )
 
     private val en: Map<T, String> = mapOf(
@@ -232,6 +242,11 @@ internal object LbText {
         T.OPERATION_FAILED to "operation failed: %s",
         T.INTERACTIVE_HINT to "lb interactive mode: type a subcommand (install/remove/list/info/doctor/env/shell), exit to quit",
         T.UNKNOWN_ARG to "unknown argument: %s",
+        T.OVERLAY_MOUNTED to "mounted (detectable)",
+        T.OVERLAY_NONE to "not mounted",
+        T.SIGNED_YES to "yes",
+        T.SIGNED_NO to "no",
+        T.USAGE_TRUST_IMPORT to "usage: lb trust import <root.json>",
     )
 
     fun table(language: String): Map<T, String> = if (language.startsWith("zh")) zh else en
