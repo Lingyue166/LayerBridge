@@ -54,4 +54,5 @@
     <string name="language_system">跟随系统</string>
     <string name="language_zh">中文</string>
     <string name="language_en">English</string>
+    <string name="msg_busy">已有安装任务在运行，请稍后再试</string>
 </resources>

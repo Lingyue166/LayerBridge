@@ -54,4 +54,5 @@
     <string name="language_system">Follow system</string>
     <string name="language_zh">中文</string>
     <string name="language_en">English</string>
+    <string name="msg_busy">Another install is running, try again later</string>
 </resources>

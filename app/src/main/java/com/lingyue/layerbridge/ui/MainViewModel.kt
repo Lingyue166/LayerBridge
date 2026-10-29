@@ -1,6 +1,7 @@
 package com.lingyue.layerbridge.ui
 
 import android.app.Application
+import com.google.gson.Gson
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.lingyue.layerbridge.R
@@ -27,6 +28,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 
 data class UiState(
     val packages: List<RepoPackage> = emptyList(),
@@ -56,6 +58,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         runCatching { application.assets.open(asset).readBytes() }.getOrNull()
     }
 
+    private val busy = AtomicBoolean(false)
+    private val indexFile = File(application.cacheDir, "repo-index.json")
+
+    private data class SavedIndex(
+        val verified: Boolean = false,
+        val date: String? = null,
+        val packages: List<RepoPackage> = emptyList(),
+    )
+
     private val _state = MutableStateFlow(
         UiState(
             requireSignature = prefs.getBoolean("require_signature", true),
@@ -66,6 +77,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         refreshInstalled()
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { Gson().fromJson(indexFile.readText(), SavedIndex::class.java) }
+                .getOrNull()
+                ?.takeIf { it.packages.isNotEmpty() }
+                ?.let { saved ->
+                    _state.update {
+                        it.copy(
+                            packages = saved.packages,
+                            repoVerified = saved.verified,
+                            repoDate = saved.date,
+                        )
+                    }
+                    appendLog("[repo] 载入缓存索引：${saved.packages.size} 个包")
+                }
+        }
         viewModelScope.launch {
             val root = RootDetector.detect(getApplication())
             _state.update { it.copy(root = root) }
@@ -133,6 +159,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 }
                 appendLog("[repo] ${repo.url}：${index.packages.size} 个包，签名=${index.signatureVerified}")
+                withContext(Dispatchers.IO) {
+                    runCatching {
+                        indexFile.parentFile?.mkdirs()
+                        indexFile.writeText(
+                            Gson().toJson(SavedIndex(index.signatureVerified, index.releaseDate, index.packages)),
+                        )
+                    }.onFailure { appendLog("[repo] 缓存索引失败：${it.message}") }
+                }
             }.onFailure {
                 _state.update { state -> state.copy(message = str(R.string.msg_index_failed, it.message.orEmpty())) }
                 appendLog("[repo] 失败：${it.message}")
@@ -142,8 +176,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun install(name: String) {
-        if (_state.value.installing != null) return
+        if (!busy.compareAndSet(false, true)) return notifyBusy()
         viewModelScope.launch {
+            try {
             val snapshot = _state.value
             val installedVersions = snapshot.installed.associate { it.name to it.version }
             val installedProvides = snapshot.installed
@@ -156,6 +191,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     appendLog("[resolve] ${outcome.message}")
                 }
                 is ResolveOutcome.Success -> installPlan(outcome.order)
+            }
+            } finally {
+                busy.set(false)
             }
         }
     }
@@ -201,15 +239,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun uninstall(name: String) {
-        if (_state.value.installing != null) return
+        if (!busy.compareAndSet(false, true)) return notifyBusy()
         viewModelScope.launch {
-            _state.update { it.copy(installing = name, message = str(R.string.msg_uninstalling, name)) }
-            installer.uninstall(name) { line -> appendLog(line) }
-                .onSuccess { _state.update { s -> s.copy(message = str(R.string.msg_uninstalled, name)) } }
-                .onFailure { _state.update { s -> s.copy(message = str(R.string.msg_uninstall_failed, it.message.orEmpty())) } }
-            refreshInstalled()
-            _state.update { it.copy(installing = null) }
+            try {
+                _state.update { it.copy(installing = name, message = str(R.string.msg_uninstalling, name)) }
+                installer.uninstall(name) { line -> appendLog(line) }
+                    .onSuccess { _state.update { s -> s.copy(message = str(R.string.msg_uninstalled, name)) } }
+                    .onFailure { _state.update { s -> s.copy(message = str(R.string.msg_uninstall_failed, it.message.orEmpty())) } }
+                refreshInstalled()
+                _state.update { it.copy(installing = null) }
+            } finally {
+                busy.set(false)
+            }
         }
+    }
+
+    private fun notifyBusy() {
+        _state.update { it.copy(message = str(R.string.msg_busy)) }
     }
 
     private fun appendLog(line: String) {

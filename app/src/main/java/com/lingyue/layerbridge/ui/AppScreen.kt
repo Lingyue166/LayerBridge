@@ -128,6 +128,7 @@ private fun PackagesScreen(state: UiState, viewModel: MainViewModel, modifier: M
                     pkg = pkg,
                     installedVersion = state.installedNames[pkg.name]?.version,
                     installing = state.installing == pkg.name,
+                    actionsEnabled = state.installing == null,
                     onInstall = { viewModel.install(pkg.name) },
                     onUninstall = { viewModel.uninstall(pkg.name) },
                 )
@@ -143,6 +144,7 @@ private fun PackageRow(
     pkg: RepoPackage,
     installedVersion: String?,
     installing: Boolean,
+    actionsEnabled: Boolean,
     onInstall: () -> Unit,
     onUninstall: () -> Unit,
 ) {
@@ -174,8 +176,14 @@ private fun PackageRow(
         Spacer(Modifier.width(8.dp))
         when {
             installing -> CircularProgressIndicator(modifier = Modifier.size(24.dp))
-            installedVersion != null -> TextButton(onClick = onUninstall) { Text(stringResource(R.string.action_uninstall)) }
-            else -> Button(onClick = onInstall) { Text(stringResource(R.string.action_install)) }
+            installedVersion != null -> TextButton(
+                onClick = onUninstall,
+                enabled = actionsEnabled,
+            ) { Text(stringResource(R.string.action_uninstall)) }
+            else -> Button(
+                onClick = onInstall,
+                enabled = actionsEnabled,
+            ) { Text(stringResource(R.string.action_install)) }
         }
     }
 }

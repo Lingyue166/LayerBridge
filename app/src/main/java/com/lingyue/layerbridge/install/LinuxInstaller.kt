@@ -343,17 +343,23 @@ class LinuxInstaller(
         val dirs = ROOT_BIN_DIRS.filter { Shell.exec("test -d ${PathGuard.quote(it)}").isSuccess }
         if (dirs.isEmpty()) return
 
-        dirs.forEach { dir ->
-            Shell.exec(
-                "find ${PathGuard.quote(dir)} -maxdepth 1 -type l -lname ${PathGuard.quote("${LbPaths.SYSTEM_BIN}/*")} -delete",
-            )
+        // 显式关闭时清掉自己的链接
+        if (Shell.exec("test -f ${PathGuard.quote(LbPaths.NO_EXPOSE_ROOT_FLAG)}").isSuccess) {
+            dirs.forEach { dir ->
+                Shell.exec(
+                    "find ${PathGuard.quote(dir)} -maxdepth 1 -type l " +
+                        "-lname ${PathGuard.quote("${LbPaths.SYSTEM_BIN}/*")} -delete",
+                )
+            }
+            return
         }
-        // 默认开启；只有显式写了 no-expose-root 才不建链
-        if (Shell.exec("test -f ${PathGuard.quote(LbPaths.NO_EXPOSE_ROOT_FLAG)}").isSuccess) return
 
         val files = statusDb.load().flatMap { statusDb.readFileList(it.name) }
-        ExposeCommands.of(files, BLOCKED_COMMANDS).forEach { command ->
-            dirs.forEach { dir ->
+        val commands = ExposeCommands.of(files, BLOCKED_COMMANDS).toSet()
+
+        dirs.forEach { dir ->
+            // 先补建，再删多余：中断时不会留下“全空”的窗口
+            commands.forEach { command ->
                 val exists = Shell.exec(
                     "test -e ${PathGuard.quote("$dir/$command")} || test -L ${PathGuard.quote("$dir/$command")}",
                 ).isSuccess
@@ -363,6 +369,13 @@ class LinuxInstaller(
                     )
                 }
             }
+
+            val listed = Shell.exec(
+                "find ${PathGuard.quote(dir)} -maxdepth 1 -type l " +
+                    "-lname ${PathGuard.quote("${LbPaths.SYSTEM_BIN}/*")}",
+            ).output
+            LinkSync.stale(listed.lineSequence().filter { it.startsWith(dir) }.toList(), commands)
+                .forEach { stale -> Shell.exec("rm -f ${PathGuard.quote(stale)}") }
         }
     }
 
