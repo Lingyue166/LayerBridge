@@ -24,7 +24,7 @@ object PayloadExtractor {
     suspend fun extractDeb(deb: DebFile, targetDir: String, onLog: (String) -> Unit): List<String> =
         extract(targetDir, onLog) { tar, paths ->
             deb.dataTarInputStream().use { input ->
-                copyEntries(input, tar, paths) { normalize(it) }
+                copyEntries(input, tar, paths) { PayloadPath.normalize(it) }
             }
         }
 
@@ -35,7 +35,7 @@ object PayloadExtractor {
                     val name = raw.removePrefix("./")
                     when {
                         name.startsWith("control/") || name == "control" -> null
-                        name.startsWith("files/") -> normalize(name.removePrefix("files/"))
+                        name.startsWith("files/") -> PayloadPath.normalize(name.removePrefix("files/"))
                         else -> error("未知 payload 路径：$raw")
                     }
                 }
@@ -109,7 +109,7 @@ object PayloadExtractor {
             }
             entry.isSymbolicLink -> {
                 val out = TarArchiveEntry(path, TarConstants.LF_SYMLINK)
-                out.linkName = entry.linkName
+                out.linkName = PayloadPath.mapLink(entry.linkName, LbPaths.PREFIX)
                 out.mode = mode
                 out.userId = 0
                 out.groupId = 0
@@ -118,7 +118,7 @@ object PayloadExtractor {
                 paths += path
             }
             entry.isLink -> {
-                val target = normalize(entry.linkName)
+                val target = PayloadPath.normalize(entry.linkName)
                 if (target != null) {
                     val out = TarArchiveEntry(path, TarConstants.LF_LINK)
                     out.linkName = target
@@ -155,14 +155,6 @@ object PayloadExtractor {
                 paths += path
             }
         }
-    }
-
-    private fun normalize(raw: String): String? {
-        var name = raw.removePrefix("./")
-        if (name.isEmpty() || name == ".") return null
-        if (name.endsWith('/')) name = name.dropLast(1)
-        if (!PathGuard.isRelativePath(name)) error("非法包路径：$raw")
-        return name
     }
 
     private fun payloadTar(lbpa: LbpaFile): TarArchiveInputStream {
