@@ -216,9 +216,13 @@ object LbMain {
                     continue
                 }
                 println(LbText.current(T.INSTALLING, pkg.name, pkg.version))
-                val code = installOne(prepared, pkg.path, policy, requireInstalled = false)
-                if (code != 0) return@runBlocking code
+                val code = installOne(prepared, pkg.path, policy, requireInstalled = false, updateLinks = false)
+                if (code != 0) {
+                    prepared.refreshRootLinks()
+                    return@runBlocking code
+                }
             }
+            prepared.refreshRootLinks()
             0
         }
     }
@@ -240,12 +244,13 @@ object LbMain {
         file: File,
         policy: InstallPolicy,
         requireInstalled: Boolean,
+        updateLinks: Boolean = true,
     ): Int {
         val result = when {
             file.name.endsWith(".deb", ignoreCase = true) ->
-                installer.installDeb(file, LOCAL_REPO, false, policy, requireInstalled) { println(it) }
+                installer.installDeb(file, LOCAL_REPO, false, policy, requireInstalled, updateLinks) { println(it) }
             file.name.endsWith(".lbpa", ignoreCase = true) ->
-                installer.installLbpa(file, LOCAL_REPO, false, policy, requireInstalled) { println(it) }
+                installer.installLbpa(file, LOCAL_REPO, false, policy, requireInstalled, updateLinks) { println(it) }
             else -> return fail(LbText.current(T.ERR_UNKNOWN_TYPE, file.name))
         }
         return result.fold(

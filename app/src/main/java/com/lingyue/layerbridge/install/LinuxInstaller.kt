@@ -56,6 +56,7 @@ class LinuxInstaller(
         repoVerified: Boolean,
         policy: InstallPolicy,
         requireInstalled: Boolean = false,
+        updateLinks: Boolean = true,
         onLog: (String) -> Unit,
     ): Result<InstalledPackage> = withContext(Dispatchers.IO) {
         runCatching {
@@ -122,7 +123,7 @@ class LinuxInstaller(
                     scan = if (policy.malwareScan) "pass" else "skipped",
                     scriptsStatus = scriptsStatus,
                     relations = relations,
-                ).also { finishInstall(it, paths, dataFiles, onLog) }
+                ).also { finishInstall(it, paths, dataFiles, updateLinks, onLog) }
             } catch (t: Throwable) {
                 maintainerScripts.clear(name)
                 throw t
@@ -137,6 +138,7 @@ class LinuxInstaller(
         repoVerified: Boolean,
         policy: InstallPolicy,
         requireInstalled: Boolean = false,
+        updateLinks: Boolean = true,
         onLog: (String) -> Unit,
     ): Result<InstalledPackage> = withContext(Dispatchers.IO) {
         runCatching {
@@ -217,7 +219,7 @@ class LinuxInstaller(
                     scriptsStatus = scriptsStatus,
                     relations = relations,
                     removeHooks = removeHooks,
-                ).also { finishInstall(it, paths, dataFiles, onLog) }
+                ).also { finishInstall(it, paths, dataFiles, updateLinks, onLog) }
             } catch (t: Throwable) {
                 maintainerScripts.clear(name)
                 throw t
@@ -326,6 +328,7 @@ class LinuxInstaller(
         pkg: InstalledPackage,
         paths: List<String>,
         dataFiles: List<String>,
+        updateLinks: Boolean,
         onLog: (String) -> Unit,
     ) {
         statusDb.upsert(pkg)
@@ -333,12 +336,14 @@ class LinuxInstaller(
         statusDb.writePreservedData(pkg.name, dataFiles)
         writeEnvFile()
         writeWrappers(pkg.name, paths)
-        syncRootLinks()
+        if (updateLinks) syncRootLinks()
         statusDb.endTransaction(pkg.name)
         onLog("[lb] 已安装 ${pkg.name} ${pkg.version}")
     }
 
     /** 重建 root 管理器 bin 目录里的软链：只动指向我们 wrapper 的链接，从不覆盖已有命令。 */
+    suspend fun refreshRootLinks() = syncRootLinks()
+
     private suspend fun syncRootLinks() {
         val dirs = ROOT_BIN_DIRS.filter { Shell.exec("test -d ${PathGuard.quote(it)}").isSuccess }
         if (dirs.isEmpty()) return
@@ -357,25 +362,9 @@ class LinuxInstaller(
         val files = statusDb.load().flatMap { statusDb.readFileList(it.name) }
         val commands = ExposeCommands.of(files, BLOCKED_COMMANDS).toSet()
 
+        // 每个目录一条脚本，一次 su 完成补建与清理
         dirs.forEach { dir ->
-            // 先补建，再删多余：中断时不会留下“全空”的窗口
-            commands.forEach { command ->
-                val exists = Shell.exec(
-                    "test -e ${PathGuard.quote("$dir/$command")} || test -L ${PathGuard.quote("$dir/$command")}",
-                ).isSuccess
-                if (!exists) {
-                    Shell.exec(
-                        "ln -s ${PathGuard.quote("${LbPaths.SYSTEM_BIN}/$command")} ${PathGuard.quote("$dir/$command")}",
-                    )
-                }
-            }
-
-            val listed = Shell.exec(
-                "find ${PathGuard.quote(dir)} -maxdepth 1 -type l " +
-                    "-lname ${PathGuard.quote("${LbPaths.SYSTEM_BIN}/*")}",
-            ).output
-            LinkSync.stale(listed.lineSequence().filter { it.startsWith(dir) }.toList(), commands)
-                .forEach { stale -> Shell.exec("rm -f ${PathGuard.quote(stale)}") }
+            Shell.exec(LinkScript.build(dir, commands, LbPaths.SYSTEM_BIN))
         }
     }
 
