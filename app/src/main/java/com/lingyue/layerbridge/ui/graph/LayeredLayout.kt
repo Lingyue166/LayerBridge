@@ -37,9 +37,9 @@ object LayeredLayout {
     fun layout(
         nodes: List<GraphNodeInput>,
         edges: List<GraphEdgeInput>,
-        layerGap: Float = 40f,
-        nodeGap: Float = 20f,
-        channelGap: Float = 10f,
+        layerGap: Float = 96f,
+        nodeGap: Float = 28f,
+        channelGap: Float = 16f,
     ): LayeredLayoutResult {
         if (nodes.isEmpty()) return LayeredLayoutResult(emptyList(), emptyList(), 0f, 0f)
         val ids = nodes.map { it.id }.toSet()
@@ -94,7 +94,7 @@ object LayeredLayout {
             spans.forEach { gap -> if (gap in gapCount.indices) gapCount[gap]++ }
         }
         val gapWidth = FloatArray(gapCount.size) { g ->
-            layerGap + minOf((gapCount[g] - 1).coerceAtLeast(0) * channelGap, 140f)
+            layerGap + (gapCount[g] - 1).coerceAtLeast(0) * channelGap
         }
         val xOf = FloatArray(layerCount)
         for (g in 0 until layerCount - 1) {

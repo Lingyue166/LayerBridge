@@ -121,21 +121,22 @@ internal fun DependencyGraph(state: UiState, viewModel: MainViewModel, modifier:
                 layout.edges.forEach { edge ->
                     val points = edge.points
                     if (points.size < 2) return@forEach
-                    val start = Offset(
+                    var current = Offset(
                         with(density) { (points.first().first + PAD_DP).dp.toPx() },
                         with(density) { (points.first().second + PAD_DP).dp.toPx() },
                     )
-                    val path = Path()
-                    path.moveTo(start.x, start.y)
                     points.drop(1).forEach { point ->
                         val end = Offset(
                             with(density) { (point.first + PAD_DP).dp.toPx() },
                             with(density) { (point.second + PAD_DP).dp.toPx() },
                         )
-                        val midX = (start.x + end.x) / 2f
-                        path.cubicTo(midX, start.y, midX, end.y, end.x, end.y)
+                        val midX = (current.x + end.x) / 2f
+                        val path = Path()
+                        path.moveTo(current.x, current.y)
+                        path.cubicTo(midX, current.y, midX, end.y, end.x, end.y)
+                        drawPath(path, color = lineColor, style = Stroke(width = stroke))
+                        current = end
                     }
-                    drawPath(path, color = lineColor, style = Stroke(width = stroke))
                 }
             }
             layout.nodes.forEach { node ->
