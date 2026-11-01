@@ -70,4 +70,32 @@
     <string name="dash_activity">Recent activity</string>
     <string name="dash_no_activity">Nothing yet</string>
     <string name="dash_refresh">Refresh</string>
+
+    <string name="dash_runtime">Runtime status</string>
+    <string name="dash_module">Module</string>
+    <string name="dash_entry">Entry</string>
+    <string name="dash_db">State DB</string>
+    <string name="dash_app">App</string>
+    <string name="dash_android">Android</string>
+    <string name="dash_ok">OK</string>
+    <string name="dash_missing">Missing</string>
+
+    <string name="nav_dashboard">Dashboard</string>
+    <string name="nav_packages">Packages</string>
+    <string name="pkg_search_hint">Search installed packages</string>
+    <string name="pkg_install_local">Install</string>
+    <string name="pkg_details">Details</string>
+    <string name="pkg_uninstall">Remove</string>
+    <string name="pkg_uninstall_title">Remove package</string>
+    <string name="pkg_uninstall_message">Remove %1$s? Package data is kept by default.</string>
+    <string name="pkg_cancel">Cancel</string>
+    <string name="pkg_confirm">Remove</string>
+    <string name="pkg_empty">No installed packages</string>
+    <string name="pkg_version">Version</string>
+    <string name="pkg_arch">Arch</string>
+    <string name="pkg_format">Format</string>
+    <string name="pkg_installed_at">Installed</string>
+    <string name="pkg_signer">Signer</string>
+    <string name="pkg_scan">Scan</string>
+    <string name="pkg_depends">Depends</string>
 </resources>

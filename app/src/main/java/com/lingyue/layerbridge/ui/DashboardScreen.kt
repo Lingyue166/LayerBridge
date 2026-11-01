@@ -11,62 +11,52 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lingyue.layerbridge.R
 import com.lingyue.layerbridge.core.LbPaths
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.theme.ThemeController
 
 @Composable
-fun DashboardApp(viewModel: MainViewModel = viewModel()) {
-    val state by viewModel.state.collectAsStateWithLifecycle()
-    val controller = remember { ThemeController(ColorSchemeMode.System) }
-    MiuixTheme(controller) {
-        Scaffold(topBar = { SmallTopAppBar(title = "LayerBridge") }) { padding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                SystemCard(state)
-                InstalledCard(state)
-                SourceCard()
-                ActivityCard(state.log)
-                Spacer(Modifier.height(4.dp))
-                Button(
-                    onClick = { viewModel.refreshInstalled() },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColorsPrimary(),
-                ) {
-                    Text(stringResource(R.string.dash_refresh))
-                }
-            }
+fun DashboardPage(
+    state: UiState,
+    viewModel: MainViewModel,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        SystemCard(state)
+        InstalledCard(state)
+        SourceCard()
+        ActivityCard(state.log)
+        Spacer(Modifier.height(4.dp))
+        Button(
+            onClick = { viewModel.refreshInstalled() },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColorsPrimary(),
+        ) {
+            Text(stringResource(R.string.dash_refresh))
         }
     }
 }
-
 @Composable
 private fun SystemCard(state: UiState) {
+    val runtime = state.runtime
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(stringResource(R.string.dash_system), style = MiuixTheme.textStyles.title3)
+            Text(stringResource(R.string.dash_runtime), style = MiuixTheme.textStyles.title3)
             InfoRow(
                 label = stringResource(R.string.dash_root),
                 value = when {
@@ -76,10 +66,20 @@ private fun SystemCard(state: UiState) {
                 },
             )
             InfoRow(label = stringResource(R.string.dash_prefix), value = LbPaths.PREFIX)
+            InfoRow(label = stringResource(R.string.dash_module), value = flag(runtime?.module))
+            InfoRow(label = stringResource(R.string.dash_entry), value = flag(runtime?.entry))
+            InfoRow(label = stringResource(R.string.dash_db), value = flag(runtime?.db))
+            InfoRow(label = stringResource(R.string.dash_app), value = runtime?.appVersion ?: "-")
+            InfoRow(label = stringResource(R.string.dash_android), value = runtime?.android ?: "-")
         }
     }
 }
-
+@Composable
+private fun flag(value: Boolean?): String = when (value) {
+    null -> stringResource(R.string.dash_checking)
+    true -> stringResource(R.string.dash_ok)
+    false -> stringResource(R.string.dash_missing)
+}
 @Composable
 private fun InstalledCard(state: UiState) {
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -95,7 +95,6 @@ private fun InstalledCard(state: UiState) {
         }
     }
 }
-
 @Composable
 private fun SourceCard() {
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -109,7 +108,6 @@ private fun SourceCard() {
         }
     }
 }
-
 @Composable
 private fun ActivityCard(log: String) {
     val tail = remember(log) {
@@ -130,7 +128,6 @@ private fun ActivityCard(log: String) {
         }
     }
 }
-
 @Composable
 private fun InfoRow(label: String, value: String) {
     Row(

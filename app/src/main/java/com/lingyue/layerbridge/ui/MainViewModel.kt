@@ -1,6 +1,8 @@
 package com.lingyue.layerbridge.ui
 
 import android.app.Application
+import android.net.Uri
+import android.provider.OpenableColumns
 import com.google.gson.Gson
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -30,6 +32,15 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 
+data class RuntimeInfo(
+    val prefix: Boolean = false,
+    val module: Boolean = false,
+    val entry: Boolean = false,
+    val db: Boolean = false,
+    val appVersion: String = "",
+    val android: String = "",
+)
+
 data class UiState(
     val packages: List<RepoPackage> = emptyList(),
     val installed: List<InstalledPackage> = emptyList(),
@@ -43,6 +54,7 @@ data class UiState(
     val message: String = "",
     val requireSignature: Boolean = true,
     val malwareScan: Boolean = true,
+    val runtime: RuntimeInfo? = null,
 ) {
     val installedNames: Map<String, InstalledPackage> get() = installed.associateBy { it.name }
 }
@@ -78,6 +90,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         refreshInstalled()
+        refreshRuntime()
         if (repo != null) {
             viewModelScope.launch(Dispatchers.IO) {
                 runCatching { Gson().fromJson(indexFile.readText(), SavedIndex::class.java) }
@@ -118,10 +131,86 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearLog() = _state.update { it.copy(log = "") }
 
+    fun installFromUris(uris: List<Uri>) {
+        if (uris.isEmpty()) return
+        if (!busy.compareAndSet(false, true)) return notifyBusy()
+        viewModelScope.launch {
+            try {
+                val app = getApplication<Application>()
+                val policy = InstallPolicy(
+                    requireSignature = _state.value.requireSignature,
+                    malwareScan = _state.value.malwareScan,
+                )
+                installer.bootstrap().onFailure { appendLog("[lb] prefix init failed: ${it.message}") }
+                uris.forEach { uri ->
+                    val name = displayName(uri) ?: "package.bin"
+                    val tmp = File(app.cacheDir, "install-${System.nanoTime()}-$name")
+                    runCatching {
+                        app.contentResolver.openInputStream(uri)?.use { input ->
+                            tmp.outputStream().use { output -> input.copyTo(output) }
+                        }
+                    }.onFailure { appendLog("[lb] read failed: ${it.message}") }
+                    if (tmp.isFile) {
+                        appendLog("[lb] installing $name")
+                        val result = when {
+                            name.endsWith(".deb", ignoreCase = true) ->
+                                installer.installDeb(tmp, "local", false, policy) { appendLog(it) }
+                            name.endsWith(".lbpa", ignoreCase = true) || name.endsWith(".lb", ignoreCase = true) ->
+                                installer.installLbpa(tmp, "local", false, policy) { appendLog(it) }
+                            else -> null.also { appendLog("[lb] unsupported file: $name") }
+                        }
+                        result?.onFailure { appendLog("[lb] install failed: ${it.message}") }
+                        tmp.delete()
+                    }
+                }
+                refreshInstalled()
+            } finally {
+                busy.set(false)
+            }
+        }
+    }
+
+    private fun displayName(uri: Uri): String? = runCatching {
+        getApplication<Application>().contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (index >= 0 && cursor.moveToFirst()) cursor.getString(index) else null
+        }
+    }.getOrNull()
+
+    fun refreshRuntime() {
+        viewModelScope.launch {
+            val info = withContext(Dispatchers.IO) {
+                val script = listOf(
+                    "printf 'prefix=%s\\n' \"\$(test -d /data/adb/lb/usr && echo 1 || echo 0)\"",
+                    "printf 'module=%s\\n' \"\$(test -d /data/adb/modules/lb && echo 1 || echo 0)\"",
+                    "printf 'entry=%s\\n' \"\$(test -x /system/bin/lb && echo 1 || echo 0)\"",
+                    "printf 'db=%s\\n' \"\$(test -f /data/adb/lb/db/installed.tsv && echo 1 || echo 0)\"",
+                ).joinToString("\n")
+                val out = com.lingyue.layerbridge.core.Shell.exec(script).output
+                fun flag(key: String): Boolean =
+                    out.lineSequence().any { it.trim() == "$key=1" }
+                val pm = getApplication<Application>().packageManager
+                val version = runCatching {
+                    pm.getPackageInfo(getApplication<Application>().packageName, 0).versionName
+                }.getOrNull().orEmpty()
+                RuntimeInfo(
+                    prefix = flag("prefix"),
+                    module = flag("module"),
+                    entry = flag("entry"),
+                    db = flag("db"),
+                    appVersion = version,
+                    android = "Android ${android.os.Build.VERSION.RELEASE} / API ${android.os.Build.VERSION.SDK_INT}",
+                )
+            }
+            _state.update { it.copy(runtime = info) }
+        }
+    }
+
     fun refreshInstalled() {
         viewModelScope.launch {
             val installed = withContext(Dispatchers.IO) { statusDb.load() }
             _state.update { it.copy(installed = installed) }
+            refreshRuntime()
         }
     }
 

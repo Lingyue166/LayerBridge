@@ -70,4 +70,32 @@
     <string name="dash_activity">最近活动</string>
     <string name="dash_no_activity">暂无</string>
     <string name="dash_refresh">刷新</string>
+
+    <string name="dash_runtime">运行状态</string>
+    <string name="dash_module">模块</string>
+    <string name="dash_entry">入口</string>
+    <string name="dash_db">状态库</string>
+    <string name="dash_app">应用</string>
+    <string name="dash_android">系统</string>
+    <string name="dash_ok">正常</string>
+    <string name="dash_missing">缺失</string>
+
+    <string name="nav_dashboard">面板</string>
+    <string name="nav_packages">软件包</string>
+    <string name="pkg_search_hint">搜索已安装包</string>
+    <string name="pkg_install_local">安装</string>
+    <string name="pkg_details">详情</string>
+    <string name="pkg_uninstall">卸载</string>
+    <string name="pkg_uninstall_title">卸载包</string>
+    <string name="pkg_uninstall_message">卸载 %1$s 默认保留数据</string>
+    <string name="pkg_cancel">取消</string>
+    <string name="pkg_confirm">卸载</string>
+    <string name="pkg_empty">没有已安装的包</string>
+    <string name="pkg_version">版本</string>
+    <string name="pkg_arch">架构</string>
+    <string name="pkg_format">格式</string>
+    <string name="pkg_installed_at">安装时间</string>
+    <string name="pkg_signer">签名者</string>
+    <string name="pkg_scan">检测</string>
+    <string name="pkg_depends">依赖</string>
 </resources>
