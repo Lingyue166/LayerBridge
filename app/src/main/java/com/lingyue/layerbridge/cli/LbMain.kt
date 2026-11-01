@@ -225,11 +225,11 @@ object LbMain {
                     return@runBlocking code
                 }
                 installedCount++
-                println("[lb]   用时：${(System.nanoTime() - pkgStart) / 1_000_000} ms")
+                println("[lb]   elapsed: ${(System.nanoTime() - pkgStart) / 1_000_000} ms")
             }
             prepared.refreshRootLinks()
             val totalMs = (System.nanoTime() - startedAt) / 1_000_000
-            println("[lb] 完成：$installedCount 个包，总计 ${totalMs} ms（${totalMs / 1000.0} s）")
+            println("[lb] done: $installedCount packages, total ${totalMs} ms (${totalMs / 1000.0} s)")
             0
         }
     }
