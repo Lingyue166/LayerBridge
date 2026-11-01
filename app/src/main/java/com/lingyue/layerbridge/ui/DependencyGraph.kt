@@ -134,15 +134,15 @@ internal fun DependencyGraph(state: UiState, viewModel: MainViewModel, modifier:
                     path.moveTo(startX, startY)
                     path.cubicTo(startX + control, startY, endX - control, endY, endX, endY)
                     drawPath(path, color = lineColor, style = Stroke(width = stroke))
-                    // 终点箭头 指向卡片左缘
-                    val arrow = with(density) { 9.dp.toPx() }
-                    val half = arrow * 0.45f
-                    val head = Path()
-                    head.moveTo(endX, endY)
-                    head.lineTo(endX - arrow, endY - half)
-                    head.lineTo(endX - arrow, endY + half)
-                    head.close()
-                    drawPath(head, color = lineColor)
+                    // 箭头指向被依赖方 A（依赖 A -> B，箭头落在 A 的右缘）
+                    val arrowSize = with(density) { 7.dp.toPx() }
+                    val arrow = Path().apply {
+                        moveTo(startX, startY)
+                        lineTo(startX + arrowSize, startY - arrowSize * 0.6f)
+                        lineTo(startX + arrowSize, startY + arrowSize * 0.6f)
+                        close()
+                    }
+                    drawPath(arrow, color = lineColor)
                 }
             }
             layout.nodes.forEach { node ->
