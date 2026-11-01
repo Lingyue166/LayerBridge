@@ -78,20 +78,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         refreshInstalled()
-        viewModelScope.launch(Dispatchers.IO) {
-            runCatching { Gson().fromJson(indexFile.readText(), SavedIndex::class.java) }
-                .getOrNull()
-                ?.takeIf { it.packages.isNotEmpty() }
-                ?.let { saved ->
-                    _state.update {
-                        it.copy(
-                            packages = saved.packages,
-                            repoVerified = saved.verified,
-                            repoDate = saved.date,
-                        )
+        if (repo != null) {
+            viewModelScope.launch(Dispatchers.IO) {
+                runCatching { Gson().fromJson(indexFile.readText(), SavedIndex::class.java) }
+                    .getOrNull()
+                    ?.takeIf { it.packages.isNotEmpty() }
+                    ?.let { saved ->
+                        _state.update {
+                            it.copy(
+                                packages = saved.packages,
+                                repoVerified = saved.verified,
+                                repoDate = saved.date,
+                            )
+                        }
+                        appendLog("[repo] loaded cached index: ${saved.packages.size} packages")
                     }
-                    appendLog("[repo] 载入缓存索引：${saved.packages.size} 个包")
-                }
+            }
         }
         viewModelScope.launch {
             val root = RootDetector.detect(getApplication())

@@ -56,4 +56,18 @@
     <string name="language_en">English</string>
     <string name="msg_busy">Another install is running, try again later</string>
     <string name="msg_no_repo">No package source configured</string>
+
+    <string name="dash_system">System</string>
+    <string name="dash_root">Root</string>
+    <string name="dash_checking">Checking</string>
+    <string name="dash_granted">Granted</string>
+    <string name="dash_denied">Not granted</string>
+    <string name="dash_prefix">Prefix</string>
+    <string name="dash_packages">Packages</string>
+    <string name="dash_installed">Installed</string>
+    <string name="dash_source">Source</string>
+    <string name="dash_source_none">No source configured</string>
+    <string name="dash_activity">Recent activity</string>
+    <string name="dash_no_activity">Nothing yet</string>
+    <string name="dash_refresh">Refresh</string>
 </resources>

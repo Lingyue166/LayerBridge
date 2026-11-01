@@ -5,7 +5,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import com.lingyue.layerbridge.ui.LayerBridgeApp
+import com.lingyue.layerbridge.ui.DashboardApp
 import com.lingyue.layerbridge.ui.LocaleHelper
 import com.lingyue.layerbridge.ui.theme.LayerBridgeTheme
 
@@ -19,9 +19,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            LayerBridgeTheme {
-                LayerBridgeApp()
-            }
+            DashboardApp()
         }
     }
 }

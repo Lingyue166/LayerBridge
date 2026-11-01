@@ -56,4 +56,18 @@
     <string name="language_en">English</string>
     <string name="msg_busy">已有安装任务在运行，请稍后再试</string>
     <string name="msg_no_repo">未配置软件源</string>
+
+    <string name="dash_system">系统</string>
+    <string name="dash_root">Root</string>
+    <string name="dash_checking">检测中</string>
+    <string name="dash_granted">已授权</string>
+    <string name="dash_denied">未授权</string>
+    <string name="dash_prefix">前缀</string>
+    <string name="dash_packages">软件包</string>
+    <string name="dash_installed">已安装</string>
+    <string name="dash_source">软件源</string>
+    <string name="dash_source_none">未配置软件源</string>
+    <string name="dash_activity">最近活动</string>
+    <string name="dash_no_activity">暂无</string>
+    <string name="dash_refresh">刷新</string>
 </resources>
