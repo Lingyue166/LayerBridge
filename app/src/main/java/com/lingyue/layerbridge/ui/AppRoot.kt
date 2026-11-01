@@ -29,6 +29,7 @@ import top.yukonga.miuix.kmp.icon.extended.Home
 @Composable
 fun AppRoot(viewModel: MainViewModel = viewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val log by viewModel.log.collectAsStateWithLifecycle()
     val controller = remember { ThemeController(ColorSchemeMode.System) }
     var tab by rememberSaveable { mutableIntStateOf(0) }
 
@@ -72,7 +73,7 @@ fun AppRoot(viewModel: MainViewModel = viewModel()) {
             },
         ) { padding ->
             when (tab) {
-                0 -> DashboardPage(state, viewModel, Modifier.padding(padding))
+                0 -> DashboardPage(state, log, viewModel, Modifier.padding(padding))
                 else -> PackagesPage(state, viewModel, Modifier.padding(padding))
             }
         }

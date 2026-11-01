@@ -7,7 +7,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.lingyue.layerbridge.ui.AppRoot
 import com.lingyue.layerbridge.ui.LocaleHelper
-import com.lingyue.layerbridge.ui.theme.LayerBridgeTheme
 
 class MainActivity : ComponentActivity() {
 

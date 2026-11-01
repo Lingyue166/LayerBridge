@@ -50,7 +50,6 @@ data class UiState(
     val repoDate: String? = null,
     val loading: Boolean = false,
     val installing: String? = null,
-    val log: String = "",
     val message: String = "",
     val requireSignature: Boolean = true,
     val malwareScan: Boolean = true,
@@ -79,6 +78,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val date: String? = null,
         val packages: List<RepoPackage> = emptyList(),
     )
+
+    private val _log = MutableStateFlow("")
+    val log: StateFlow<String> = _log.asStateFlow()
 
     private val _state = MutableStateFlow(
         UiState(
@@ -129,7 +131,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun str(id: Int, vararg args: Any): String =
         LocaleHelper.wrap(getApplication()).getString(id, *args)
 
-    fun clearLog() = _state.update { it.copy(log = "") }
+    fun clearLog() { _log.value = "" }
 
     fun installFromUris(uris: List<Uri>) {
         if (uris.isEmpty()) return
@@ -216,7 +218,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun bootstrap() {
         viewModelScope.launch {
-            _state.update { it.copy(loading = true, log = "") }
+            _state.update { it.copy(loading = true) }
+            _log.value = ""
             val result = installer.bootstrap()
             result.onSuccess {
                 val apk = getApplication<Application>().applicationInfo.sourceDir
@@ -360,9 +363,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun appendLog(line: String) {
         if (line.isBlank()) return
-        _state.update { current ->
-            val lines = (current.log + line + "\n").lines().takeLast(400)
-            current.copy(log = lines.joinToString("\n"))
-        }
+        val lines = (_log.value + line + "\n").lines().takeLast(400)
+        _log.value = lines.joinToString("\n")
     }
 }
