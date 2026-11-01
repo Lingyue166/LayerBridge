@@ -154,33 +154,13 @@ object LayeredLayout {
             }
         }
 
-        // 端口：同一卡片出边/入边分散到右缘/左缘不同高度
-        val outEdges = mutableMapOf<String, MutableList<Int>>()
-        val inEdges = mutableMapOf<String, MutableList<Int>>()
-        chains.forEachIndexed { index, chain ->
-            outEdges.getOrPut(chain.first()) { mutableListOf() } += index
-            inEdges.getOrPut(chain.last()) { mutableListOf() } += index
+        // 每张卡片只有一个连接点：出边在右缘中点 入边在左缘中点
+        val outPort = chains.indices.associateWith { index ->
+            posById.getValue(chains[index].first()).let { it.y + it.height / 2 }
         }
-        val outPort = mutableMapOf<Int, Float>()
-        val inPort = mutableMapOf<Int, Float>()
-        fun assignPorts(nodeId: String, edgeIndexes: List<Int>, map: MutableMap<Int, Float>, otherFirst: Boolean) {
-            val node = posById[nodeId] ?: return
-            val center = node.y + node.height / 2
-            val sorted = edgeIndexes.sortedBy { index ->
-                val chain = chains[index]
-                val otherId = if (otherFirst) chain.first() else chain.last()
-                centerY[otherId] ?: center
-            }
-            val n = sorted.size
-            val usable = (node.height - 16f).coerceAtLeast(8f)
-            val spacing = if (n <= 1) 0f else minOf(12f, usable / (n - 1))
-            sorted.forEachIndexed { i, index ->
-                val offset = if (n == 1) 0f else (i - (n - 1) / 2f) * spacing
-                map[index] = (center + offset).coerceIn(node.y + 8f, node.y + node.height - 8f)
-            }
+        val inPort = chains.indices.associateWith { index ->
+            posById.getValue(chains[index].last()).let { it.y + it.height / 2 }
         }
-        outEdges.forEach { (nodeId, list) -> assignPorts(nodeId, list, outPort, otherFirst = false) }
-        inEdges.forEach { (nodeId, list) -> assignPorts(nodeId, list, inPort, otherFirst = true) }
 
         // 直接连线：起点右缘端口 终点左缘端口 画成平滑 S 曲线 只有两个弯
         val placedEdges = chains.mapIndexed { index, chain ->

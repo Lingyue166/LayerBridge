@@ -150,6 +150,23 @@ internal fun DependencyGraph(state: UiState, viewModel: MainViewModel, modifier:
                     )
                 }
             }
+            // 连接点：每张卡片左右各一个 显示为小圆点
+            Canvas(Modifier.size((layout.width + PAD_DP * 2).dp, (layout.height + PAD_DP * 2).dp)) {
+                val radius = with(density) { 4.dp.toPx() }
+                val dotColor = MiuixTheme.colorScheme.primary
+                layout.edges.forEach { edge ->
+                    listOf(edge.points.first(), edge.points.last()).forEach { point ->
+                        drawCircle(
+                            color = dotColor,
+                            radius = radius,
+                            center = Offset(
+                                with(density) { (point.first + PAD_DP).dp.toPx() },
+                                with(density) { (point.second + PAD_DP).dp.toPx() },
+                            ),
+                        )
+                    }
+                }
+            }
         }
     }
 
