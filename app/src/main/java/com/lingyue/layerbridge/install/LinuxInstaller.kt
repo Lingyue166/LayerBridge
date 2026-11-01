@@ -359,8 +359,12 @@ class LinuxInstaller(
             return
         }
 
-        val files = statusDb.load().flatMap { statusDb.readFileList(it.name) }
-        val commands = ExposeCommands.of(files, BLOCKED_COMMANDS).toSet()
+        // 直接看 wrapper 目录：它就是当前命令集合，避免逐包读状态文件
+        val listed = Shell.exec("ls -1 ${PathGuard.quote(LbPaths.SYSTEM_BIN)} 2>/dev/null").output
+        val commands = listed.lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && isExposableCommand(it) && it !in BLOCKED_COMMANDS }
+            .toSet()
 
         // 每个目录一条脚本，一次 su 完成补建与清理
         dirs.forEach { dir ->
