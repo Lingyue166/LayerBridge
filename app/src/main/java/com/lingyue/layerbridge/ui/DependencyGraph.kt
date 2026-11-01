@@ -117,6 +117,7 @@ internal fun DependencyGraph(state: UiState, viewModel: MainViewModel, modifier:
         ) {
             val stroke = with(density) { 2.dp.toPx() }
             val lineColor = MiuixTheme.colorScheme.onSurfaceVariantSummary
+            val dotColor = MiuixTheme.colorScheme.primary
             Canvas(Modifier.size((layout.width + PAD_DP * 2).dp, (layout.height + PAD_DP * 2).dp)) {
                 layout.edges.forEach { edge ->
                     val points = edge.points
@@ -153,7 +154,6 @@ internal fun DependencyGraph(state: UiState, viewModel: MainViewModel, modifier:
             // 连接点：每张卡片左右各一个 显示为小圆点
             Canvas(Modifier.size((layout.width + PAD_DP * 2).dp, (layout.height + PAD_DP * 2).dp)) {
                 val radius = with(density) { 4.dp.toPx() }
-                val dotColor = MiuixTheme.colorScheme.primary
                 layout.edges.forEach { edge ->
                     listOf(edge.points.first(), edge.points.last()).forEach { point ->
                         drawCircle(
