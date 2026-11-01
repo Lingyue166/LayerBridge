@@ -29,6 +29,7 @@ import com.lingyue.layerbridge.state.InstalledPackage
 import com.lingyue.layerbridge.ui.graph.GraphEdgeInput
 import com.lingyue.layerbridge.ui.graph.GraphNodeInput
 import com.lingyue.layerbridge.ui.graph.LayeredLayout
+import com.lingyue.layerbridge.ui.graph.PlacedNode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlin.math.min
 
@@ -40,16 +41,55 @@ internal fun DependencyGraph(state: UiState, viewModel: MainViewModel, modifier:
     val density = LocalDensity.current
     val installed = remember(state.installed) { state.installed.sortedBy { it.name } }
     val layout = remember(installed, metrics.cardWidth, metrics.cardHeight) {
-        val nodes = installed.map {
-            GraphNodeInput(it.name, metrics.cardWidth.value, metrics.cardHeight.value)
-        }
+        val names = installed.map { it.name }.toSet()
         val edges = installed.flatMap { pkg ->
             parseDependencyNames(pkg.relations.depends)
-                .filter { name -> installed.any { it.name == name } && name != pkg.name }
+                .filter { name -> name in names && name != pkg.name }
                 .distinct()
                 .map { GraphEdgeInput(pkg.name, it) }
         }
-        LayeredLayout.layout(nodes, edges)
+        val connectedNames = edges.flatMap { listOf(it.from, it.to) }.toSet()
+        val connected = installed.filter { it.name in connectedNames }
+        val isolated = installed.filter { it.name !in connectedNames }
+        val graph = LayeredLayout.layout(
+            nodes = connected.map {
+                GraphNodeInput(it.name, metrics.cardWidth.value, metrics.cardHeight.value)
+            },
+            edges = edges,
+        )
+        // 无任何依赖关系的包不占一整列 统一排成方块放在图下方
+        val colGap = 20f
+        val rowGap = 20f
+        val columns = if (isolated.isEmpty()) 1 else {
+            val fitting = ((graph.width + colGap) / (metrics.cardWidth.value + colGap)).toInt()
+                .coerceIn(1, 4)
+            minOf(columnsFor(isolated.size), fitting).coerceAtLeast(1)
+        }
+        val extra = isolated.mapIndexed { index, pkg ->
+            val row = index / columns
+            val col = index % columns
+            PlacedNode(
+                id = pkg.name,
+                x = col * (metrics.cardWidth.value + colGap),
+                y = graph.height + 24f + row * (metrics.cardHeight.value + rowGap),
+                width = metrics.cardWidth.value,
+                height = metrics.cardHeight.value,
+            )
+        }
+        val gridWidth = if (isolated.isEmpty()) 0f else {
+            minOf(columns, isolated.size) * (metrics.cardWidth.value + colGap) - colGap
+        }
+        val totalWidth = maxOf(graph.width, gridWidth)
+        val totalHeight = if (isolated.isEmpty()) graph.height else {
+            val rows = (isolated.size + columns - 1) / columns
+            graph.height + 24f + rows * (metrics.cardHeight.value + rowGap) - rowGap
+        }
+        RenderLayout(
+            nodes = graph.nodes + extra,
+            edges = graph.edges,
+            width = totalWidth,
+            height = totalHeight,
+        )
     }
     val byName = remember(installed) { installed.associateBy { it.name } }
     var detail by remember { mutableStateOf<InstalledPackage?>(null) }
@@ -200,4 +240,27 @@ internal fun parseDependencyNames(depends: String?): List<String> {
                 .substringBefore('|')
         }
         .filter { it.isNotBlank() }
+}
+
+private data class RenderLayout(
+    val nodes: List<PlacedNode>,
+    val edges: List<com.lingyue.layerbridge.ui.graph.PlacedEdge>,
+    val width: Float,
+    val height: Float,
+)
+
+private fun columnsFor(count: Int): Int {
+    if (count <= 3) return count.coerceAtLeast(1)
+    var best = 1
+    var bestAspect = Float.MAX_VALUE
+    for (columns in 1..count) {
+        val rows = (count + columns - 1) / columns
+        val aspect = columns.toFloat() / rows
+        val diff = kotlin.math.abs(aspect - 1f)
+        if (diff < bestAspect) {
+            bestAspect = diff
+            best = columns
+        }
+    }
+    return best
 }
