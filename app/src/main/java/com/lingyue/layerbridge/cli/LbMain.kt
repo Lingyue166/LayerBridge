@@ -209,6 +209,8 @@ object LbMain {
 
             val policy = policyOf(options)
             val prepared = prepareInstaller(policy) ?: return@runBlocking 1
+            val startedAt = System.nanoTime()
+            var installedCount = 0
             for (pkg in plan.order) {
                 val existing = installed[pkg.name]
                 if (existing != null) {
@@ -216,13 +218,18 @@ object LbMain {
                     continue
                 }
                 println(LbText.current(T.INSTALLING, pkg.name, pkg.version))
+                val pkgStart = System.nanoTime()
                 val code = installOne(prepared, pkg.path, policy, requireInstalled = false, updateLinks = false)
                 if (code != 0) {
                     prepared.refreshRootLinks()
                     return@runBlocking code
                 }
+                installedCount++
+                println("[lb]   用时：${(System.nanoTime() - pkgStart) / 1_000_000} ms")
             }
             prepared.refreshRootLinks()
+            val totalMs = (System.nanoTime() - startedAt) / 1_000_000
+            println("[lb] 完成：$installedCount 个包，总计 ${totalMs} ms（${totalMs / 1000.0} s）")
             0
         }
     }

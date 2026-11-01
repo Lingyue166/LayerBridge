@@ -60,6 +60,7 @@ class LinuxInstaller(
         onLog: (String) -> Unit,
     ): Result<InstalledPackage> = withContext(Dispatchers.IO) {
         runCatching {
+            val tStart = System.nanoTime()
             val parsed = DebFile(deb)
             val control = parsed.readControl()
             val name = control.packageName?.takeIf { PathGuard.isPackageName(it) }
@@ -74,9 +75,14 @@ class LinuxInstaller(
                 conflicts = control.conflicts,
                 breaks = control.breaks,
             )
+            onLog("[lb]   包信息：$name $version $arch（${elapsedMs(tStart)} ms）")
+            val tSign = System.nanoTime()
             val signer = verifyDebSignature(deb, name, repoId, repoVerified, policy)
             ConflictCheck.find(name, version, relations, statusDb.load())?.let { error(it.message) }
+            val tScan = System.nanoTime()
             scanScripts("$name:deb", control.scripts, policy, onLog)
+            onLog("[lb]   签名：$signer（${elapsedMs(tSign)} ms）")
+            onLog("[lb]   安全检查：${elapsedMs(tScan)} ms")
 
             val existing = statusDb.find(name)
             if (requireInstalled && existing == null) error("未安装 $name，请使用 install")
@@ -101,9 +107,13 @@ class LinuxInstaller(
                 if (preinst != null && !preinst.isSuccess) error("preinst 失败")
 
                 statusDb.beginTransaction(name, version)
+                val tExtract = System.nanoTime()
                 val paths = PayloadExtractor.extractDeb(parsed, stageDir(name), onLog)
                 statusDb.recordTransaction(InstallTransaction(name, version, PHASE_MERGE, paths, wrapperCommands(paths)))
+                onLog("[lb]   解包：${paths.size} 个文件（${elapsedMs(tExtract)} ms）")
+                val tMerge = System.nanoTime()
                 mergeStaged(name, paths, onLog)
+                onLog("[lb]   写入前缀：${elapsedMs(tMerge)} ms")
                 restorePaths(name, keep)
                 if (existing != null) removeObsolete(oldFiles, paths, keep, emptyList(), onLog)
 
@@ -142,6 +152,7 @@ class LinuxInstaller(
         onLog: (String) -> Unit,
     ): Result<InstalledPackage> = withContext(Dispatchers.IO) {
         runCatching {
+            val tStart = System.nanoTime()
             val parsed = LbpaFile.parse(file)
             val info = parsed.manifest.packageInfo ?: error("缺少 package 元数据")
             val name = info.name?.takeIf { PathGuard.isPackageName(it) } ?: error("非法包名")
@@ -158,10 +169,15 @@ class LinuxInstaller(
             )
             val removeHooks = parsed.manifest.hooks?.remove.orEmpty()
 
+            onLog("[lb]   包信息：$name $version $arch（${elapsedMs(tStart)} ms）")
+            val tSign = System.nanoTime()
             val signer = verifyLbpaSignature(parsed, repoId, repoVerified, policy)
             ConflictCheck.find(name, version, relations, statusDb.load())?.let { error(it.message) }
             val controlScripts = PayloadExtractor.readLbpaControl(parsed)
+            val tScan = System.nanoTime()
             scanScripts("$name:lbpa", controlScripts, policy, onLog)
+            onLog("[lb]   签名：$signer（${elapsedMs(tSign)} ms）")
+            onLog("[lb]   安全检查：${elapsedMs(tScan)} ms")
 
             val upgrade = parsed.manifest.upgrade
             val existing = statusDb.find(name)
@@ -190,9 +206,13 @@ class LinuxInstaller(
                 if (preinst != null && !preinst.isSuccess) error("preinst 失败")
 
                 statusDb.beginTransaction(name, version)
+                val tExtract = System.nanoTime()
                 val paths = PayloadExtractor.extractLbpa(parsed, stageDir(name), onLog)
                 statusDb.recordTransaction(InstallTransaction(name, version, PHASE_MERGE, paths, wrapperCommands(paths)))
+                onLog("[lb]   解包：${paths.size} 个文件（${elapsedMs(tExtract)} ms）")
+                val tMerge = System.nanoTime()
                 mergeStaged(name, paths, onLog)
+                onLog("[lb]   写入前缀：${elapsedMs(tMerge)} ms")
                 restorePaths(name, keep)
                 if (existing != null) removeObsolete(oldFiles, paths, keep, extraRemove, onLog)
 
@@ -331,13 +351,26 @@ class LinuxInstaller(
         updateLinks: Boolean,
         onLog: (String) -> Unit,
     ) {
+        val tStatus = System.nanoTime()
         statusDb.upsert(pkg)
         statusDb.writeFileList(pkg.name, paths)
         statusDb.writePreservedData(pkg.name, dataFiles)
-        writeEnvFile()
-        writeWrappers(pkg.name, paths)
-        if (updateLinks) syncRootLinks()
         statusDb.endTransaction(pkg.name)
+        onLog("[lb]   状态记录：${elapsedMs(tStatus)} ms")
+
+        val tEnv = System.nanoTime()
+        writeEnvFile()
+        onLog("[lb]   环境文件：${elapsedMs(tEnv)} ms")
+
+        val tWrap = System.nanoTime()
+        writeWrappers(pkg.name, paths)
+        onLog("[lb]   写入命令：${wrapperCommands(paths).size} 个（${elapsedMs(tWrap)} ms）")
+
+        if (updateLinks) {
+            val tLinks = System.nanoTime()
+            syncRootLinks()
+            onLog("[lb]   同步软链：${elapsedMs(tLinks)} ms")
+        }
         onLog("[lb] 已安装 ${pkg.name} ${pkg.version}")
     }
 
@@ -371,6 +404,8 @@ class LinuxInstaller(
             Shell.exec(LinkScript.build(dir, commands, LbPaths.SYSTEM_BIN))
         }
     }
+
+    private fun elapsedMs(start: Long): Long = (System.nanoTime() - start) / 1_000_000
 
     private fun stageDir(name: String): String = "${LbPaths.CACHE}/stage/$name"
 
