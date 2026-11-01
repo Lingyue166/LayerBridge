@@ -21,7 +21,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -55,11 +57,13 @@ fun PackagesPage(
         Column(modifier = modifier.fillMaxSize()) {
             TextField(
                 value = state.query,
-                onValueChange = viewModel::setQuery,
+                onValueChange = { viewModel.setQuery(it.replace("\n", "")) },
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                 label = stringResource(R.string.pkg_search_hint),
                 useLabelAsPlaceholder = true,
                 cornerRadius = 24.dp,
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             )
             DependencyGraph(state, viewModel, Modifier.weight(1f))
         }
@@ -81,11 +85,13 @@ fun PackagesPage(
     Column(modifier = modifier.fillMaxSize()) {
         TextField(
             value = state.query,
-            onValueChange = viewModel::setQuery,
+            onValueChange = { viewModel.setQuery(it.replace("\n", "")) },
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             label = stringResource(R.string.pkg_search_hint),
             useLabelAsPlaceholder = true,
             cornerRadius = 24.dp,
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
         )
         if (packages.isEmpty()) {
             Column(Modifier.padding(16.dp)) {

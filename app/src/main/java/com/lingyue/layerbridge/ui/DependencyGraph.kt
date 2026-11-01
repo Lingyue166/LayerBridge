@@ -14,6 +14,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
@@ -133,14 +134,25 @@ internal fun DependencyGraph(state: UiState, viewModel: MainViewModel, modifier:
                     path.moveTo(startX, startY)
                     path.cubicTo(startX + control, startY, endX - control, endY, endX, endY)
                     drawPath(path, color = lineColor, style = Stroke(width = stroke))
+                    // 终点箭头 指向卡片左缘
+                    val arrow = with(density) { 9.dp.toPx() }
+                    val half = arrow * 0.45f
+                    val head = Path()
+                    head.moveTo(endX, endY)
+                    head.lineTo(endX - arrow, endY - half)
+                    head.lineTo(endX - arrow, endY + half)
+                    head.close()
+                    drawPath(head, color = lineColor)
                 }
             }
             layout.nodes.forEach { node ->
                 val pkg = byName[node.id] ?: return@forEach
+                val matched = state.query.isBlank() || node.id.contains(state.query.trim(), ignoreCase = true)
                 Box(
                     Modifier
                         .offset((node.x + PAD_DP).dp, (node.y + PAD_DP).dp)
-                        .size(metrics.cardWidth, metrics.cardHeight),
+                        .size(metrics.cardWidth, metrics.cardHeight)
+                        .alpha(if (matched) 1f else 0.3f),
                 ) {
                     PackageCard(
                         pkg = pkg,
