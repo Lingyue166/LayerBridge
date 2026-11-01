@@ -182,9 +182,22 @@ object LayeredLayout {
         outEdges.forEach { (nodeId, list) -> assignPorts(nodeId, list, outPort, otherFirst = false) }
         inEdges.forEach { (nodeId, list) -> assignPorts(nodeId, list, inPort, otherFirst = true) }
 
+        // 虚拟节点同样有坐标 线路由经过它们时不会横穿卡片
+        val allPos = mutableMapOf<String, PlacedNode>()
+        placed.forEach { allPos[it.id] = it }
+        dummyIds.forEach { id ->
+            val rank = ranks.getValue(id)
+            allPos[id] = PlacedNode(
+                id = id,
+                x = xOf[rank],
+                y = yOf.getValue(id),
+                width = 4f,
+                height = 4f,
+            )
+        }
+
         val placedEdges = chains.mapIndexed { index, chain ->
             val from = posById.getValue(chain.first())
-            val to = posById.getValue(chain.last())
             val fromRank = ranks.getValue(chain.first())
             val toRank = ranks.getValue(chain.last())
             val startY = outPort.getValue(index)
@@ -194,12 +207,13 @@ object LayeredLayout {
             for (gap in fromRank until toRank) {
                 val target = gapTargets(chain, gap)
                 val lane = laneX.getValue(gap to target)
+                val nextNode = allPos.getValue(chain[gap + 1 - fromRank])
+                val nextY = if (gap == toRank - 1) endY else nextNode.y + nextNode.height / 2
                 points += lane to currentY
-                val progress = (gap + 1 - fromRank).toFloat() / (toRank - fromRank).toFloat()
-                currentY = startY + (endY - startY) * progress
-                points += lane to currentY
+                points += lane to nextY
+                points += nextNode.x to nextY
+                currentY = nextY
             }
-            points += to.x to endY
             PlacedEdge(points)
         }
 
