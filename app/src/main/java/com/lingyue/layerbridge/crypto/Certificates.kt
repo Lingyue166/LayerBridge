@@ -205,11 +205,11 @@ object Certificates {
      */
     /** 信任根校验：自签名、CA、cert-signing、有效期。 */
     fun validateRoot(cert: Certificate, now: Instant = Instant.now()): Result<Unit> {
-        if (!cert.verifySelf()) return Result.failure(IllegalArgumentException("根证书自签名无效"))
-        if (!cert.isWithin(now)) return Result.failure(IllegalArgumentException("根证书不在有效期"))
-        if (!cert.isCA) return Result.failure(IllegalArgumentException("根证书不是 CA"))
+        if (!cert.verifySelf()) return Result.failure(IllegalArgumentException("root certificate self-signature is invalid"))
+        if (!cert.isWithin(now)) return Result.failure(IllegalArgumentException("root certificate is not within its validity period"))
+        if (!cert.isCA) return Result.failure(IllegalArgumentException("root certificate is not CA"))
         if (!cert.hasUsage("cert-signing")) {
-            return Result.failure(IllegalArgumentException("根证书缺少 cert-signing 用途"))
+            return Result.failure(IllegalArgumentException("root certificate lacks cert-signing usage"))
         }
         return Result.success(Unit)
     }
@@ -220,17 +220,17 @@ object Certificates {
         packageName: String,
         now: Instant = Instant.now(),
     ): Result<Certificate> {
-        if (!root.verifySelf()) return Result.failure(IllegalArgumentException("根证书自签名无效"))
-        if (!root.isWithin(now)) return Result.failure(IllegalArgumentException("根证书不在有效期"))
-        if (!root.allowsPackage(packageName)) return Result.failure(IllegalArgumentException("根证书限制包名"))
+        if (!root.verifySelf()) return Result.failure(IllegalArgumentException("root certificate self-signature is invalid"))
+        if (!root.isWithin(now)) return Result.failure(IllegalArgumentException("root certificate is not within its validity period"))
+        if (!root.allowsPackage(packageName)) return Result.failure(IllegalArgumentException("root certificate restricts package names"))
         if (!root.isCA || !root.hasUsage("cert-signing")) {
-            return Result.failure(IllegalArgumentException("根证书不是 CA"))
+            return Result.failure(IllegalArgumentException("root certificate is not CA"))
         }
-        if (chain.size > 5) return Result.failure(IllegalArgumentException("证书链过长"))
+        if (chain.size > 5) return Result.failure(IllegalArgumentException("certificate chain too long"))
 
         if (chain.isEmpty()) {
             if (!root.hasUsage("package-signing")) {
-                return Result.failure(IllegalArgumentException("根证书无包签名用途"))
+                return Result.failure(IllegalArgumentException("root certificate lacks package signing usage"))
             }
             return Result.success(root)
         }
@@ -238,34 +238,34 @@ object Certificates {
         chain.forEachIndexed { index, cert ->
             val parent = if (index + 1 < chain.size) chain[index + 1] else root
             if (!cert.isWithin(now)) {
-                return Result.failure(IllegalArgumentException("证书过期：${cert.subject}"))
+                return Result.failure(IllegalArgumentException("certificate expired: ${cert.subject}"))
             }
             if (!cert.allowsPackage(packageName)) {
-                return Result.failure(IllegalArgumentException("证书限制包名：${cert.subject}"))
+                return Result.failure(IllegalArgumentException("certificate restricts package names: ${cert.subject}"))
             }
             if (cert.keyId != keyIdOf(cert)) {
-                return Result.failure(IllegalArgumentException("证书 keyId 不匹配"))
+                return Result.failure(IllegalArgumentException("certificate keyId mismatch"))
             }
             if (cert.issuerKeyId != parent.keyId) {
-                return Result.failure(IllegalArgumentException("证书签发者不匹配：${cert.subject}"))
+                return Result.failure(IllegalArgumentException("certificate issuer mismatch: ${cert.subject}"))
             }
             val signature = cert.signature
-                ?: return Result.failure(IllegalArgumentException("证书缺少签名：${cert.subject}"))
+                ?: return Result.failure(IllegalArgumentException("certificate is missing a signature: ${cert.subject}"))
             if (!verify(cert.canonicalBytes(), signature, parent.publicKey())) {
-                return Result.failure(IllegalArgumentException("证书签名无效：${cert.subject}"))
+                return Result.failure(IllegalArgumentException("certificate signature invalid: ${cert.subject}"))
             }
             if (index == 0) {
                 if (!cert.hasUsage("package-signing")) {
-                    return Result.failure(IllegalArgumentException("叶证书无包签名用途"))
+                    return Result.failure(IllegalArgumentException("leaf certificate lacks package signing usage"))
                 }
             } else {
                 if (!cert.isCA || !cert.hasUsage("cert-signing")) {
-                    return Result.failure(IllegalArgumentException("上级证书不是 CA：${cert.subject}"))
+                    return Result.failure(IllegalArgumentException("issuer certificate is not CA: ${cert.subject}"))
                 }
                 val caBelow = (1 until index).count { chain[it].isCA }
                 val limit = cert.pathLen ?: 0
                 if (limit >= 0 && caBelow > limit) {
-                    return Result.failure(IllegalArgumentException("CA 路径长度超限：${cert.subject}"))
+                    return Result.failure(IllegalArgumentException("CA path length exceeded: ${cert.subject}"))
                 }
             }
         }
@@ -273,7 +273,7 @@ object Certificates {
         val rootCaBelow = (1 until chain.size).count { chain[it].isCA }
         val rootLimit = root.pathLen ?: 0
         if (rootLimit >= 0 && rootCaBelow > rootLimit) {
-            return Result.failure(IllegalArgumentException("根证书路径长度超限"))
+            return Result.failure(IllegalArgumentException("root certificate path length exceeded"))
         }
         return Result.success(chain.first())
     }

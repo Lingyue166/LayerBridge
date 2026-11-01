@@ -43,7 +43,7 @@ class RootStateStorage : StateStorage {
         val quoted = PathGuard.quote(path)
         if (!Shell.exec("test -f $quoted").isSuccess) return null
         val result = Shell.exec("cat $quoted")
-        if (!result.isSuccess) error("读取状态失败：$path：${result.output}")
+        if (!result.isSuccess) error("read state failed: $path: ${result.output}")
         return result.output
     }
 
@@ -51,9 +51,9 @@ class RootStateStorage : StateStorage {
         // 先写临时文件再原子替换：中途被杀也不会把状态文件截断成半截
         val temp = "$path.tmp"
         val written = Shell.writeFile(temp, content, mode)
-        if (!written.isSuccess) error("写入状态失败：$path：${written.output}")
+        if (!written.isSuccess) error("write state failed: $path: ${written.output}")
         val moved = Shell.exec("mv -f ${PathGuard.quote(temp)} ${PathGuard.quote(path)}")
-        if (!moved.isSuccess) error("替换状态失败：$path：${moved.output}")
+        if (!moved.isSuccess) error("replace state failed: $path: ${moved.output}")
     }
 
     override suspend fun delete(path: String) {

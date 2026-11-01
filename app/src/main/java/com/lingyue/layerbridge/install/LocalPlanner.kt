@@ -92,24 +92,24 @@ object LocalPlanner {
         packages.forEach { pkg ->
             packages.filter { it.name != pkg.name }.forEach { other ->
                 hits(pkg.conflicts, pkg.version, other.name, other.version)?.let {
-                    found += "${pkg.name} 与 ${other.name} 冲突：Conflicts: $it"
+                    found += "${pkg.name} conflicts with ${other.name}: Conflicts: $it"
                 }
                 hits(pkg.breaks, pkg.version, other.name, other.version)?.let {
-                    found += "${pkg.name} 与 ${other.name} 冲突：Breaks: $it"
+                    found += "${pkg.name} conflicts with ${other.name}: Breaks: $it"
                 }
             }
             installed.forEach { (name, version) ->
                 hits(pkg.conflicts, pkg.version, name, version)?.let {
-                    found += "${pkg.name} 与已安装 $name 冲突：Conflicts: $it"
+                    found += "${pkg.name} conflicts with installed $name: Conflicts: $it"
                 }
                 hits(pkg.breaks, pkg.version, name, version)?.let {
-                    found += "${pkg.name} 与已安装 $name 冲突：Breaks: $it"
+                    found += "${pkg.name} conflicts with installed $name: Breaks: $it"
                 }
             }
             aliases.forEach { (owner, provided) ->
                 provided.forEach { alias ->
                     hits(pkg.conflicts, pkg.version, alias, packages.first { it.name == owner }.version)?.let {
-                        found += "${pkg.name} 与 $owner 提供的 $alias 冲突：Conflicts: $it"
+                        found += "${pkg.name} conflicts with $alias provided by $owner: Conflicts: $it"
                     }
                 }
             }

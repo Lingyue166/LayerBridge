@@ -13,11 +13,11 @@ class MaintainerScripts(private val rootDir: String = DB_SCRIPTS) {
 
     /** 保存包内全部 control 脚本；名称不合规的直接视为坏包（失败即停）。 */
     suspend fun save(packageName: String, scripts: Map<String, ByteArray>) {
-        require(PathGuard.isPackageName(packageName)) { "非法包名：$packageName" }
+        require(PathGuard.isPackageName(packageName)) { "invalid package name: $packageName" }
         scripts.forEach { (rawName, bytes) ->
             val name = scriptName(rawName)
             val result = Shell.writeFile(scriptPath(packageName, name), bytes.toString(Charsets.UTF_8), "644")
-            if (!result.isSuccess) error("维护脚本写入失败：$name：${result.output}")
+            if (!result.isSuccess) error("maintainer script write failed: $name: ${result.output}")
         }
     }
 
@@ -61,7 +61,7 @@ class MaintainerScripts(private val rootDir: String = DB_SCRIPTS) {
     /** LBPA 的脚本键形如 `control/preinst`，统一成裸文件名。 */
     internal fun scriptName(raw: String): String {
         val name = raw.removePrefix("./").removePrefix("control/")
-        require(SCRIPT_NAME.matches(name)) { "非法维护脚本名：$raw" }
+        require(SCRIPT_NAME.matches(name)) { "invalid maintainer script name: $raw" }
         return name
     }
 

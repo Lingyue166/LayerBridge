@@ -1,7 +1,6 @@
 package com.lingyue.layerbridge.cli
 
 import java.io.InputStreamReader
-import java.util.Locale
 import java.util.Properties
 
 internal enum class T {
@@ -77,8 +76,8 @@ internal object LbText {
     private const val DIR = "i18n"
     private val cache = mutableMapOf<String, Map<T, String>>()
 
-    private fun languageOf(language: String): String =
-        if (language.startsWith("zh")) "zh" else "en"
+    // CLI output is ASCII-only; language selection stays for future use but always resolves to English.
+    private fun languageOf(language: String): String = "en"
 
     fun table(language: String): Map<T, String> {
         val lang = languageOf(language)
@@ -86,14 +85,14 @@ internal object LbText {
 
         val path = "$DIR/cli_$lang.properties"
         val stream = LbText::class.java.classLoader?.getResourceAsStream(path)
-            ?: error("缺少 CLI 语言文件：$path")
+            ?: error("missing CLI text file: $path")
         val props = Properties()
         stream.use { props.load(InputStreamReader(it, Charsets.UTF_8)) }
 
         val map = T.entries.mapNotNull { key -> props.getProperty(key.name)?.let { key to it } }.toMap()
         if (map.size != T.entries.size) {
             val missing = T.entries.filter { it !in map.keys }.joinToString(", ")
-            error("CLI 语言文件缺键（$path）：$missing")
+            error("CLI text file missing keys ($path): $missing")
         }
         cache[lang] = map
         return map
@@ -104,5 +103,5 @@ internal object LbText {
         return if (args.isEmpty()) template else String.format(template, *args)
     }
 
-    fun current(key: T, vararg args: Any): String = get(Locale.getDefault().language, key, *args)
+    fun current(key: T, vararg args: Any): String = get("en", key, *args)
 }

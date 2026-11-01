@@ -7,22 +7,25 @@ import org.junit.Test
 class LbTextTest {
 
     @Test
-    fun zhAndEnHaveSameKeys() {
-        assertEquals(T.entries.toSet(), LbText.table("zh").keys)
+    fun hasEveryKey() {
         assertEquals(T.entries.toSet(), LbText.table("en").keys)
     }
 
     @Test
-    fun selectsLanguageByPrefix() {
-        assertTrue(LbText.get("zh", T.USAGE_INSTALL).startsWith("用法"))
-        assertTrue(LbText.get("zh-CN", T.USAGE_INSTALL).startsWith("用法"))
-        assertTrue(LbText.get("en", T.USAGE_INSTALL).startsWith("usage"))
+    fun alwaysResolvesToEnglish() {
+        assertTrue(LbText.get("zh", T.USAGE_INSTALL).startsWith("usage"))
         assertTrue(LbText.get("ja", T.USAGE_INSTALL).startsWith("usage"))
     }
 
     @Test
-    fun loadsLanguageFiles() {
-        assertTrue(LbText.table("zh")[T.HELP]!!.contains("包管理器"))
+    fun valuesAreAscii() {
+        LbText.table("en").forEach { (key, value) ->
+            assertTrue("non-ASCII in $key", value.all { it.code < 128 })
+        }
+    }
+
+    @Test
+    fun loadsLanguageFile() {
         assertTrue(LbText.table("en")[T.HELP]!!.contains("package manager"))
     }
 

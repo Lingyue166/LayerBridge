@@ -16,7 +16,7 @@ object PayloadPath {
         if (name.isEmpty() || name == ".") return null
         if (name == TERMUX_PREFIX) return null
         if (name.startsWith("$TERMUX_PREFIX/")) name = name.removePrefix("$TERMUX_PREFIX/")
-        if (!PathGuard.isRelativePath(name)) error("非法包路径：$raw")
+        if (!PathGuard.isRelativePath(name)) error("invalid package path: $raw")
         return name
     }
 

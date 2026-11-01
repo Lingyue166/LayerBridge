@@ -28,7 +28,7 @@ data class RepoConfig(
 
         val termux = RepoConfig(
             id = "termux-main",
-            name = "Termux 官方",
+            name = "Termux official",
             url = "https://packages.termux.dev/apt/termux-main",
             keyFingerprint = TERMUX_FINGERPRINT,
             keyAsset = "trust/termux-autobuilds.gpg",
@@ -57,25 +57,25 @@ class RepoClient(
             var signatureVerified = false
             if (repo.keyFingerprint != null) {
                 val key = repo.keyAsset?.let(keyLoader)
-                    ?: throw IllegalStateException("缺少仓库公钥：${repo.keyAsset}")
+                    ?: throw IllegalStateException("missing repository key: ${repo.keyAsset}")
                 val sigUrl = "$releaseUrl.gpg"
                 val sigBytes = fetch(sigUrl, maxBytes = 1024 * 1024)
                 OpenPgpVerifier.verifyDetached(releaseBytes, sigBytes, key, repo.keyFingerprint)
                     .getOrThrow()
                 signatureVerified = true
                 if (!ReleaseParser.isFresh(release.date)) {
-                    throw IllegalStateException("Release 已超过 90 天，拒绝使用")
+                    throw IllegalStateException("Release is older than 90 days; refusing to use it")
                 }
             }
 
             val packagesPath = "${repo.component}/binary-${repo.architecture}/Packages.gz"
             val expected = release.hashFor(packagesPath)
                 ?: release.hashFor("${repo.component}/binary-${repo.architecture}/Packages")
-                ?: throw IllegalStateException("Release 中缺少 Packages 哈希")
+                ?: throw IllegalStateException("Release is missing the Packages hash")
             val packagesUrl = "${repo.url.trimEnd('/')}/dists/${repo.suite}/$packagesPath"
             val compressed = fetch(packagesUrl, maxBytes = 64L * 1024 * 1024)
             if (PackageSigner.sha256Hex(compressed) != expected) {
-                throw IllegalStateException("Packages 哈希不匹配")
+                throw IllegalStateException("Packages hash mismatch")
             }
             val text = decompress(compressed).toString(Charsets.UTF_8)
             val packages = PackagesParser.parse(text, repo.id, repo.architecture)
@@ -89,7 +89,7 @@ class RepoClient(
         onProgress: (Long, Long) -> Unit = { _, _ -> },
     ): Result<File> = withContext(Dispatchers.IO) {
         runCatching {
-            val filename = pkg.filename ?: throw IllegalArgumentException("缺少 Filename")
+            val filename = pkg.filename ?: throw IllegalArgumentException("missing Filename")
             val url = "${repo.url.trimEnd('/')}/$filename"
             val target = File(cacheDir, "${pkg.repoId}-${pkg.name}-${pkg.version}.deb")
             download(url, target, onProgress)
@@ -98,7 +98,7 @@ class RepoClient(
                 val actual = fileSha256(target)
                 if (!actual.equals(expected, ignoreCase = true)) {
                     target.delete()
-                    throw IllegalStateException("deb 哈希不匹配")
+                    throw IllegalStateException("deb hash mismatch")
                 }
             }
             target
@@ -114,9 +114,9 @@ class RepoClient(
         }
         try {
             val code = connection.responseCode
-            if (code !in 200..299) throw IllegalStateException("HTTP $code：$url")
+            if (code !in 200..299) throw IllegalStateException("HTTP $code: $url")
             val length = connection.contentLengthLong
-            if (length > maxBytes) throw IllegalStateException("响应过大：$url")
+            if (length > maxBytes) throw IllegalStateException("response too large: $url")
             return connection.inputStream.use { it.readLimited(maxBytes) }
         } finally {
             connection.disconnect()
@@ -132,7 +132,7 @@ class RepoClient(
         }
         try {
             val code = connection.responseCode
-            if (code !in 200..299) throw IllegalStateException("HTTP $code：$url")
+            if (code !in 200..299) throw IllegalStateException("HTTP $code: $url")
             val total = connection.contentLengthLong
             target.parentFile?.mkdirs()
             connection.inputStream.use { input ->
@@ -169,7 +169,7 @@ class RepoClient(
             val count = read(chunk)
             if (count < 0) break
             total += count
-            if (total > maxBytes) throw IllegalStateException("响应超过上限")
+            if (total > maxBytes) throw IllegalStateException("response exceeds limit")
             buffer.write(chunk, 0, count)
         }
         return buffer.toByteArray()

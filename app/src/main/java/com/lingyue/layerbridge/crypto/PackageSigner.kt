@@ -114,19 +114,19 @@ object PackageSigner {
         packageName: String,
         now: Instant,
     ): Result<Certificate> {
-        if (block.version != 1) return Result.failure(IllegalArgumentException("不支持的签名版本"))
+        if (block.version != 1) return Result.failure(IllegalArgumentException("unsupported signature version"))
         if (block.algorithm != SignatureBlock.ALGORITHM) {
-            return Result.failure(IllegalArgumentException("不支持的签名算法：${block.algorithm}"))
+            return Result.failure(IllegalArgumentException("unsupported signature algorithm: ${block.algorithm}"))
         }
-        if (block.signature.isBlank()) return Result.failure(IllegalArgumentException("签名值为空"))
+        if (block.signature.isBlank()) return Result.failure(IllegalArgumentException("signature value is empty"))
 
         val signer = Certificates.verifyChain(block.certChain, root, packageName, now)
             .getOrElse { return Result.failure(it) }
         if (block.keyId != signer.keyId) {
-            return Result.failure(IllegalArgumentException("签名 keyId 与证书不匹配"))
+            return Result.failure(IllegalArgumentException("signature keyId does not match certificate"))
         }
         if (!Certificates.verify(data, block.signature, signer.publicKey())) {
-            return Result.failure(IllegalArgumentException("签名验证失败"))
+            return Result.failure(IllegalArgumentException("signature verification failed"))
         }
         return Result.success(signer)
     }
@@ -143,7 +143,7 @@ object PackageSigner {
         val keyId = obj.get("keyId")?.asString ?: ""
         val signature = obj.get("signature")?.asString ?: ""
         val signedAt = obj.get("signedAt")?.asString
-        if (signature.isBlank()) throw IllegalArgumentException("缺少签名值")
+        if (signature.isBlank()) throw IllegalArgumentException("missing signature value")
         return SignatureBlock(version, algorithm, keyId, chain, signature, signedAt)
     }
 }

@@ -102,7 +102,7 @@ object Shell {
                 .redirectErrorStream(true)
                 .start()
         } catch (e: IOException) {
-            return ExecResult(-1, "[lb] 无法启动进程：${e.message}")
+            return ExecResult(-1, "[lb] cannot start process: ${e.message}")
         }
 
         val output = StringBuilder()
@@ -143,7 +143,7 @@ object Shell {
         writer.join(2_000)
 
         val text = output.toString()
-        if (!finished) return ExecResult(-1, "$text\n[lb] 命令超时")
+        if (!finished) return ExecResult(-1, "$text\n[lb] command timed out")
         writeFailure?.let { return ExecResult(-1, "$text\n[lb] ${it.message}") }
         return ExecResult(process.exitValue(), text)
     }

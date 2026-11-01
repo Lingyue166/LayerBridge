@@ -104,7 +104,7 @@ class LbpaFile private constructor(
         var skipped = 0L
         while (skipped < payloadOffset) {
             val step = raw.skip(payloadOffset - skipped)
-            if (step <= 0) throw LbpaFormatException("payload 定位失败")
+            if (step <= 0) throw LbpaFormatException("payload seek failed")
             skipped += step
         }
         return LimitedStream(raw, payloadSize)
@@ -145,18 +145,18 @@ class LbpaFile private constructor(
         }
 
         fun parse(file: File, currentLbVersion: String = "0.1.0"): LbpaFile {
-            if (!isLbpa(file)) throw LbpaFormatException("魔数不匹配")
+            if (!isLbpa(file)) throw LbpaFormatException("magic mismatch")
             DataInputStream(file.inputStream().buffered()).use { input ->
                 val magic = ByteArray(MAGIC.size)
                 input.readFully(magic)
-                if (!magic.contentEquals(MAGIC)) throw LbpaFormatException("魔数不匹配")
+                if (!magic.contentEquals(MAGIC)) throw LbpaFormatException("magic mismatch")
                 val major = input.readUnsignedShort()
                 val flags = input.readUnsignedShort()
-                if (major != 1) throw LbpaFormatException("不支持的 formatVersion：$major")
-                if (flags and 0xFFFE != 0) throw LbpaFormatException("未知 flags：$flags")
+                if (major != 1) throw LbpaFormatException("unsupported formatVersion: $major")
+                if (flags and 0xFFFE != 0) throw LbpaFormatException("unknown flags: $flags")
                 val manifestLength = input.readInt()
                 if (manifestLength <= 0 || manifestLength > MAX_MANIFEST) {
-                    throw LbpaFormatException("manifest 长度非法：$manifestLength")
+                    throw LbpaFormatException("invalid manifest length: $manifestLength")
                 }
                 val manifestBytes = ByteArray(manifestLength)
                 input.readFully(manifestBytes)
@@ -164,14 +164,14 @@ class LbpaFile private constructor(
                 val manifest = try {
                     gson.fromJson(manifestBytes.toString(Charsets.UTF_8), LbpaManifest::class.java)
                 } catch (e: JsonSyntaxException) {
-                    throw LbpaFormatException("manifest JSON 解析失败：${e.message}")
-                } ?: throw LbpaFormatException("manifest 为空")
+                    throw LbpaFormatException("manifest JSON parse failed: ${e.message}")
+                } ?: throw LbpaFormatException("manifest is empty")
 
                 validateManifest(manifest, currentLbVersion)
                 val payloadSize = manifest.payload?.size ?: 0
                 val payloadOffset = 16L + manifestLength
                 if (payloadSize <= 0 || payloadOffset + payloadSize > file.length()) {
-                    throw LbpaFormatException("payload 长度越界")
+                    throw LbpaFormatException("payload length out of bounds")
                 }
 
                 val signed = flags and 0x0001 != 0
@@ -197,20 +197,20 @@ class LbpaFile private constructor(
             val footerOffset = payloadOffset + payloadSize
             if (!signed) {
                 if (footerOffset != file.length()) {
-                    throw LbpaFormatException("未签名包尾部存在多余字节")
+                    throw LbpaFormatException("trailing bytes after unsigned payload")
                 }
                 return null
             }
-            if (footerOffset + 4 > file.length()) throw LbpaFormatException("缺少签名 footer")
+            if (footerOffset + 4 > file.length()) throw LbpaFormatException("missing signature footer")
             FileInputStream(file).use { stream ->
                 skipFully(stream, footerOffset)
                 DataInputStream(stream).use { input ->
                     val length = input.readInt()
                     if (length <= 0 || length > MAX_SIGNATURE) {
-                        throw LbpaFormatException("签名长度非法：$length")
+                        throw LbpaFormatException("invalid signature length: $length")
                     }
                     if (footerOffset + 4 + length != file.length()) {
-                        throw LbpaFormatException("签名 footer 长度不匹配")
+                        throw LbpaFormatException("signature footer length mismatch")
                     }
                     val bytes = ByteArray(length)
                     input.readFully(bytes)
@@ -223,35 +223,35 @@ class LbpaFile private constructor(
             var remaining = count
             while (remaining > 0) {
                 val skipped = stream.skip(remaining)
-                if (skipped <= 0) throw EOFException("无法定位")
+                if (skipped <= 0) throw EOFException("seek failed")
                 remaining -= skipped
             }
         }
 
         fun validateManifest(manifest: LbpaManifest, currentLbVersion: String) {
             if (manifest.format != "LAYERBRIDGEPACKONANDROID") {
-                throw LbpaFormatException("format 不匹配")
+                throw LbpaFormatException("format mismatch")
             }
             if (manifest.formatVersion != 1) {
-                throw LbpaFormatException("不支持的格式版本：${manifest.formatVersion}")
+                throw LbpaFormatException("unsupported format version: ${manifest.formatVersion}")
             }
             val minVersion = manifest.minLbVersion
             if (!minVersion.isNullOrBlank() && DpkgVersion.compare(currentLbVersion, minVersion) < 0) {
-                throw LbpaFormatException("需要 lb >= $minVersion")
+                throw LbpaFormatException("requires lb >= $minVersion")
             }
-            val pkg = manifest.packageInfo ?: throw LbpaFormatException("缺少 package")
+            val pkg = manifest.packageInfo ?: throw LbpaFormatException("missing package")
             val name = pkg.name.orEmpty()
-            if (!PathGuard.isPackageName(name)) throw LbpaFormatException("非法包名：$name")
-            if (!DpkgVersion.isValid(pkg.version.orEmpty())) throw LbpaFormatException("非法版本")
+            if (!PathGuard.isPackageName(name)) throw LbpaFormatException("invalid package name: $name")
+            if (!DpkgVersion.isValid(pkg.version.orEmpty())) throw LbpaFormatException("invalid version")
             if (pkg.architecture != "aarch64" && pkg.architecture != "all") {
-                throw LbpaFormatException("不支持的架构：${pkg.architecture}")
+                throw LbpaFormatException("unsupported architecture: ${pkg.architecture}")
             }
-            val payload = manifest.payload ?: throw LbpaFormatException("缺少 payload")
+            val payload = manifest.payload ?: throw LbpaFormatException("missing payload")
             if (payload.compression != "xz" && payload.compression != "gzip") {
-                throw LbpaFormatException("不支持的压缩：${payload.compression}")
+                throw LbpaFormatException("unsupported compression: ${payload.compression}")
             }
             val payloadHash = payload.sha256.orEmpty()
-            if (!SHA256_HEX.matches(payloadHash)) throw LbpaFormatException("payload 哈希缺失或非法")
+            if (!SHA256_HEX.matches(payloadHash)) throw LbpaFormatException("payload hash missing or invalid")
             manifest.scripts?.let { scripts ->
                 listOfNotNull(scripts.preinst, scripts.postinst, scripts.prerm, scripts.postrm)
                     .forEach { requireControlPath(it) }
@@ -262,21 +262,21 @@ class LbpaFile private constructor(
             }
             manifest.upgrade?.let { upgrade ->
                 (upgrade.keep.orEmpty() + upgrade.remove.orEmpty()).forEach {
-                    if (!PathGuard.isRelativePath(it)) throw LbpaFormatException("非法升级路径：$it")
+                    if (!PathGuard.isRelativePath(it)) throw LbpaFormatException("invalid upgrade path: $it")
                 }
                 listOfNotNull(upgrade.scripts?.pre, upgrade.scripts?.post).forEach { requireControlPath(it) }
             }
             manifest.expose.orEmpty().forEach {
-                if (!PathGuard.isRelativePath(it)) throw LbpaFormatException("非法 expose 路径：$it")
+                if (!PathGuard.isRelativePath(it)) throw LbpaFormatException("invalid expose path: $it")
             }
             manifest.data.orEmpty().forEach {
-                if (!PathGuard.isRelativePath(it)) throw LbpaFormatException("非法 data 路径：$it")
+                if (!PathGuard.isRelativePath(it)) throw LbpaFormatException("invalid data path: $it")
             }
             manifest.env?.forEach { (key, value) ->
-                if (!ENV_KEY.matches(key)) throw LbpaFormatException("非法环境变量名：$key")
-                if (key in RESERVED_ENV) throw LbpaFormatException("禁止覆盖环境变量：$key")
+                if (!ENV_KEY.matches(key)) throw LbpaFormatException("invalid environment name: $key")
+                if (key in RESERVED_ENV) throw LbpaFormatException("overriding this environment variable is forbidden: $key")
                 if (value.contains('\u0000') || value.contains('\n')) {
-                    throw LbpaFormatException("非法环境变量值：$key")
+                    throw LbpaFormatException("invalid environment value: $key")
                 }
             }
         }
@@ -286,7 +286,7 @@ class LbpaFile private constructor(
 
         private fun requireControlPath(path: String) {
             if (!PathGuard.isRelativePath(path) || !path.startsWith("control/")) {
-                throw LbpaFormatException("脚本路径必须在 control/ 下：$path")
+                throw LbpaFormatException("script path must be under control/: $path")
             }
         }
 

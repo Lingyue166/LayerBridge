@@ -27,16 +27,16 @@ object OpenPgpVerifier {
         val key = rings.keyRings.asSequence()
             .flatMap { it.publicKeys.asSequence() }
             .firstOrNull { fingerprintHex(it) == expectedFingerprint.replace(" ", "").uppercase() }
-            ?: throw IllegalArgumentException("仓库公钥指纹不匹配")
+            ?: throw IllegalArgumentException("repository key fingerprint mismatch")
 
-        if (key.isRevoked) throw IllegalArgumentException("仓库公钥已被撤销")
+        if (key.isRevoked) throw IllegalArgumentException("repository key is revoked")
         if (pgpSignature.keyID != key.keyID) {
-            throw IllegalArgumentException("签名 keyID 与仓库公钥不匹配")
+            throw IllegalArgumentException("signature keyID does not match repository key")
         }
 
         pgpSignature.init(JcaPGPContentVerifierBuilderProvider(), key)
         pgpSignature.update(content)
-        if (!pgpSignature.verify()) throw IllegalArgumentException("OpenPGP 签名验证失败")
+        if (!pgpSignature.verify()) throw IllegalArgumentException("OpenPGP signature verification failed")
         fingerprintHex(key)
     }
 
@@ -49,7 +49,7 @@ object OpenPgpVerifier {
             obj = factory.nextObject()
         }
         return obj as? PGPSignatureList
-            ?: throw IllegalArgumentException("不是 OpenPGP 签名")
+            ?: throw IllegalArgumentException("not an OpenPGP signature")
     }
 
     fun fingerprintHex(key: PGPPublicKey): String =

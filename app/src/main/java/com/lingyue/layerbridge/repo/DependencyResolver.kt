@@ -35,10 +35,10 @@ class DependencyResolver(
 
         targetNames.forEach { raw ->
             val term = RelationParser.parseTerm(raw)
-                ?: return ResolveOutcome.Failure("无法解析包名：$raw")
+                ?: return ResolveOutcome.Failure("cannot parse package name: $raw")
             if (satisfiedByInstalled(term) || satisfiedBySelected(term, selected)) return@forEach
             val candidate = pick(term, selected)
-                ?: return ResolveOutcome.Failure("找不到满足 $term 的包")
+                ?: return ResolveOutcome.Failure("no package satisfies $term")
             select(candidate, selected)
         }
 
@@ -50,7 +50,7 @@ class DependencyResolver(
                 if (satisfiedByInstalledOrSelected(dependency, selected)) return@forEach
                 val chosen = dependency.alternatives.firstNotNullOfOrNull { pick(it, selected) }
                     ?: return ResolveOutcome.Failure(
-                        "包 ${pkg.name} 依赖无法满足：$dependency",
+                        "package ${pkg.name} has unsatisfied dependency: $dependency",
                         pkg.name,
                     )
                 select(chosen, selected)
@@ -62,7 +62,7 @@ class DependencyResolver(
         if (conflictError != null) return ResolveOutcome.Failure(conflictError)
 
         val order = topologicalOrder(selected)
-            ?: return ResolveOutcome.Failure("依赖存在环，无法确定安装顺序")
+            ?: return ResolveOutcome.Failure("dependency cycle detected; cannot determine install order")
 
         return ResolveOutcome.Success(order)
     }
@@ -116,7 +116,7 @@ class DependencyResolver(
                 dependency.alternatives.forEach { term ->
                     val targetVersion = selected[term.name]?.version ?: installedVersion(term.name)
                     if (targetVersion != null && term.accepts(targetVersion) && term.name != pkg.name) {
-                        return "${pkg.name} 与 ${term.name} 冲突：$dependency"
+                        return "${pkg.name} conflicts with ${term.name}: $dependency"
                     }
                 }
             }

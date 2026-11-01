@@ -44,7 +44,7 @@ class LinuxInstaller(
                 migrate + "mkdir -p $dirs && chmod $baseMode ${PathGuard.quote(LbPaths.BASE)}" +
                     " && chmod 755 ${PathGuard.quote(LbPaths.PREFIX)}",
             )
-            if (!result.isSuccess) error("初始化前缀失败：${result.output}")
+            if (!result.isSuccess) error("prefix init failed: ${result.output}")
             writeEnvFile()
             syncRootLinks()
         }
@@ -64,10 +64,10 @@ class LinuxInstaller(
             val parsed = DebFile(deb)
             val control = parsed.readControl()
             val name = control.packageName?.takeIf { PathGuard.isPackageName(it) }
-                ?: error("非法或缺失包名")
-            val version = control.version?.takeIf { it.isNotBlank() } ?: error("缺失版本")
+                ?: error("invalid or missing package name")
+            val version = control.version?.takeIf { it.isNotBlank() } ?: error("missing version")
             val arch = control.architecture ?: "aarch64"
-            if (arch != "aarch64" && arch != "all") error("不支持的架构：$arch")
+            if (arch != "aarch64" && arch != "all") error("unsupported architecture: $arch")
 
             val relations = PackageRelations(
                 depends = control.depends,
@@ -85,7 +85,7 @@ class LinuxInstaller(
             onLog("[lb]   scan: ${elapsedMs(tScan)} ms")
 
             val existing = statusDb.find(name)
-            if (requireInstalled && existing == null) error("未安装 $name，请使用 install")
+            if (requireInstalled && existing == null) error("not installed: $name (use install)")
             logUpgrade(existing, version, onLog)
 
             val oldFiles = statusDb.readFileList(name)
@@ -95,7 +95,7 @@ class LinuxInstaller(
             // 旧包的 prerm 必须在覆盖 db/scripts 之前执行
             existing?.let { old ->
                 val prerm = maintainerScripts.run(name, old.version, "prerm", listOf("upgrade", version), onLog)
-                if (prerm != null && !prerm.isSuccess) error("prerm upgrade 失败")
+                if (prerm != null && !prerm.isSuccess) error("prerm upgrade failed")
             }
             backupPaths(name, keep)
             maintainerScripts.clear(name)
@@ -104,7 +104,7 @@ class LinuxInstaller(
             val pkg = try {
                 val preArgs = if (existing != null) listOf("upgrade", existing.version) else listOf("install")
                 val preinst = maintainerScripts.run(name, version, "preinst", preArgs, onLog)
-                if (preinst != null && !preinst.isSuccess) error("preinst 失败")
+                if (preinst != null && !preinst.isSuccess) error("preinst failed")
 
                 statusDb.beginTransaction(name, version)
                 val tExtract = System.nanoTime()
@@ -154,11 +154,11 @@ class LinuxInstaller(
         runCatching {
             val tStart = System.nanoTime()
             val parsed = LbpaFile.parse(file)
-            val info = parsed.manifest.packageInfo ?: error("缺少 package 元数据")
-            val name = info.name?.takeIf { PathGuard.isPackageName(it) } ?: error("非法包名")
-            val version = info.version ?: error("缺失版本")
+            val info = parsed.manifest.packageInfo ?: error("missing package metadata")
+            val name = info.name?.takeIf { PathGuard.isPackageName(it) } ?: error("invalid package name")
+            val version = info.version ?: error("missing version")
             val arch = info.architecture ?: "aarch64"
-            if (arch != "aarch64" && arch != "all") error("不支持的架构：$arch")
+            if (arch != "aarch64" && arch != "all") error("unsupported architecture: $arch")
 
             val lbpaRelations = parsed.manifest.relations
             val relations = PackageRelations(
@@ -181,7 +181,7 @@ class LinuxInstaller(
 
             val upgrade = parsed.manifest.upgrade
             val existing = statusDb.find(name)
-            if (requireInstalled && existing == null) error("未安装 $name，请使用 install")
+            if (requireInstalled && existing == null) error("not installed: $name (use install)")
             logUpgrade(existing, version, onLog)
 
             val oldFiles = statusDb.readFileList(name)
@@ -192,7 +192,7 @@ class LinuxInstaller(
             // 旧包的 prerm 必须在覆盖 db/scripts 之前执行
             existing?.let { old ->
                 val prerm = maintainerScripts.run(name, old.version, "prerm", listOf("upgrade", version), onLog)
-                if (prerm != null && !prerm.isSuccess) error("prerm upgrade 失败")
+                if (prerm != null && !prerm.isSuccess) error("prerm upgrade failed")
             }
             backupPaths(name, keep)
             maintainerScripts.clear(name)
@@ -203,7 +203,7 @@ class LinuxInstaller(
                 val preArgs = if (existing != null) listOf(existing.version) else listOf("install")
                 val preScript = if (existing != null) upgrade?.scripts?.pre ?: scripts?.preinst else scripts?.preinst
                 val preinst = preScript?.let { maintainerScripts.run(name, version, it, preArgs, onLog) }
-                if (preinst != null && !preinst.isSuccess) error("preinst 失败")
+                if (preinst != null && !preinst.isSuccess) error("preinst failed")
 
                 statusDb.beginTransaction(name, version)
                 val tExtract = System.nanoTime()
@@ -224,7 +224,7 @@ class LinuxInstaller(
 
                 parsed.manifest.hooks?.install.orEmpty().forEach { hook ->
                     val result = maintainerScripts.run(name, version, hook, emptyList(), onLog)
-                    if (result != null && !result.isSuccess) onLog("[lb] 钩子失败：$hook")
+                    if (result != null && !result.isSuccess) onLog("[lb] hook failed: $hook")
                 }
 
                 InstalledPackage(
@@ -255,7 +255,7 @@ class LinuxInstaller(
     suspend fun uninstall(name: String, force: Boolean = false, onLog: (String) -> Unit): Result<Unit> =
         withContext(Dispatchers.IO) {
             runCatching {
-                require(PathGuard.isPackageName(name)) { "非法包名：$name" }
+                require(PathGuard.isPackageName(name)) { "invalid package name: $name" }
                 val pkg = statusDb.find(name)
                 val transaction = statusDb.readTransaction(name)
                 val recorded = (statusDb.readFileList(name) + transaction?.files.orEmpty())
@@ -270,14 +270,14 @@ class LinuxInstaller(
                         removeFiles(preserved)
                         removeEmptyDirs(preserved)
                         statusDb.deletePreservedData(name)
-                        onLog("[lb] 已清除 ${preserved.size} 个数据文件：$name")
+                        onLog("[lb] removed ${preserved.size} data files: $name")
                     } else {
                         maintainerScripts.clear(name)
                         purgePackageDirs(name)
                         if (preserved.isNotEmpty()) {
-                            onLog("[lb] 已卸载，保留 ${preserved.size} 个数据文件（lb remove --force $name 清理）")
+                            onLog("[lb] removed; kept ${preserved.size} data files (lb remove --force $name to purge)")
                         } else {
-                            onLog("[lb] 未安装且无残留：$name")
+                            onLog("[lb] not installed and no leftovers: $name")
                         }
                     }
                     return@runCatching
@@ -285,11 +285,11 @@ class LinuxInstaller(
 
                 val version = pkg?.version ?: transaction?.version ?: "unknown"
                 val prerm = maintainerScripts.run(name, version, "prerm", listOf("remove"), onLog)
-                if (prerm != null && !prerm.isSuccess) error("prerm 失败，已取消卸载 $name")
+                if (prerm != null && !prerm.isSuccess) error("prerm failed; uninstall aborted: $name")
 
                 pkg?.removeHooks.orEmpty().forEach { hook ->
                     val result = maintainerScripts.run(name, version, hook, emptyList(), onLog)
-                    if (result != null && !result.isSuccess) onLog("[lb] 卸载钩子失败：$hook")
+                    if (result != null && !result.isSuccess) onLog("[lb] remove hook failed: $hook")
                 }
 
                 if (removal.isNotEmpty()) {
@@ -299,7 +299,7 @@ class LinuxInstaller(
                 removeWrappers(name, removal)
 
                 val postrm = maintainerScripts.run(name, version, "postrm", listOf("remove"), onLog)
-                if (postrm != null && !postrm.isSuccess) onLog("[lb] postrm 失败：$name")
+                if (postrm != null && !postrm.isSuccess) onLog("[lb] postrm failed: $name")
 
                 // 状态最后删：中途失败可重跑，残留仍可被下一次 uninstall 找到
                 statusDb.remove(name)
@@ -309,14 +309,14 @@ class LinuxInstaller(
                 } else {
                     val kept = preserved.filter { it in recorded }
                     if (kept.isNotEmpty()) {
-                        onLog("[lb] 保留 ${kept.size} 个数据文件（lb remove --force $name 清理）")
+                        onLog("[lb] kept ${kept.size} data files (lb remove --force $name to purge)")
                     }
                 }
                 maintainerScripts.clear(name)
                 purgePackageDirs(name)
                 syncRootLinks()
                 writeEnvFile()
-                onLog("[lb] 已卸载 $name（清理 ${removal.size} 个文件）")
+                onLog("[lb] removed $name (${removal.size} files)")
             }
         }
 
@@ -338,8 +338,8 @@ class LinuxInstaller(
                 }
                 syncRootLinks()
                 onLog(
-                    if (enabled) "[lb] root shell 软链已启用（默认行为），之后安装/卸载自动维护"
-                    else "[lb] root shell 软链已关闭，已清理现有链接",
+                    if (enabled) "[lb] root shell links enabled; maintained on install/remove"
+                    else "[lb] root shell links disabled; existing links removed",
                 )
             }
         }
@@ -371,7 +371,7 @@ class LinuxInstaller(
             syncRootLinks()
             onLog("[lb]   links: ${elapsedMs(tLinks)} ms")
         }
-        onLog("[lb] 已安装 ${pkg.name} ${pkg.version}")
+        onLog("[lb] installed ${pkg.name} ${pkg.version}")
     }
 
     /** 重建 root 管理器 bin 目录里的软链：只动指向我们 wrapper 的链接，从不覆盖已有命令。 */
@@ -426,8 +426,8 @@ class LinuxInstaller(
         val script = "tar -C ${PathGuard.quote(stage)} -cf - . | tar -C ${PathGuard.quote(LbPaths.PREFIX)} -xf -" +
             " && rm -rf ${PathGuard.quote(stage)}"
         val result = Shell.script(script)
-        if (!result.isSuccess) error("写入前缀失败：${result.output}")
-        onLog("[lb] 已写入 ${paths.size} 个条目")
+        if (!result.isSuccess) error("merge into prefix failed: ${result.output}")
+        onLog("[lb] wrote ${paths.size} entries")
     }
 
     /** 清掉按包名约定的缓存/暂存目录，覆盖安装中途被杀留下的半成品。 */
@@ -440,9 +440,9 @@ class LinuxInstaller(
     private fun logUpgrade(existing: InstalledPackage?, version: String, onLog: (String) -> Unit) {
         if (existing == null) return
         when (UpgradeKind.of(existing.version, version)) {
-            UpgradeKind.UPGRADE -> onLog("[lb] 升级：${existing.version} → $version")
-            UpgradeKind.DOWNGRADE -> onLog("[lb] 降级：${existing.version} → $version")
-            UpgradeKind.REINSTALL -> onLog("[lb] 同版本重装：$version")
+            UpgradeKind.UPGRADE -> onLog("[lb] upgrade: ${existing.version} -> $version")
+            UpgradeKind.DOWNGRADE -> onLog("[lb] downgrade: ${existing.version} -> $version")
+            UpgradeKind.REINSTALL -> onLog("[lb] reinstall same version: $version")
             UpgradeKind.FRESH -> Unit
         }
     }
@@ -485,7 +485,7 @@ class LinuxInstaller(
     ) {
         val obsolete = UpgradePlan.obsolete(oldFiles, newFiles, keep, extraRemove)
         if (obsolete.isEmpty()) return
-        onLog("[lb] 清理旧文件：${obsolete.size} 个")
+        onLog("[lb] removing obsolete files: ${obsolete.size}")
         removeFiles(obsolete)
         removeEmptyDirs(obsolete)
     }
@@ -494,7 +494,7 @@ class LinuxInstaller(
         files.chunked(100).forEach { chunk ->
             val command = chunk.joinToString(" ") { "rm -f -- ${PathGuard.quote("${LbPaths.PREFIX}/$it")}" }
             val result = Shell.exec(command)
-            if (!result.isSuccess) error("删除文件失败：${result.output}")
+            if (!result.isSuccess) error("delete files failed: ${result.output}")
         }
     }
 
@@ -587,13 +587,13 @@ class LinuxInstaller(
 
         val sidecar = File(deb.parentFile, deb.name + ".sig")
         if (sidecar.isFile) {
-            val root = trustStore.loadRoot() ?: error("未配置信任根，无法验证包签名")
+            val root = trustStore.loadRoot() ?: error("trust root not configured; cannot verify package signature")
             val block = PackageSigner.parseBlock(sidecar.readText(Charsets.UTF_8))
             val hash = PackageSigner.sha256File(deb)
-            return PackageSigner.verifyDeb(block, hash, root, packageName).getOrElse { error(it.message ?: "签名无效") }.subject
+            return PackageSigner.verifyDeb(block, hash, root, packageName).getOrElse { error(it.message ?: "signature is invalid") }.subject
         }
 
-        if (policy.requireSignature) error("未授权签名：$packageName")
+        if (policy.requireSignature) error("signature not authorized: $packageName")
         return null
     }
 
@@ -606,10 +606,10 @@ class LinuxInstaller(
         val signatureJson = parsed.signatureJson
         if (signatureJson == null) {
             if (repoVerified) return "repo:$repoId"
-            if (policy.requireSignature) error("未授权签名：${parsed.packageName}")
+            if (policy.requireSignature) error("signature not authorized: ${parsed.packageName}")
             return null
         }
-        val root = trustStore.loadRoot() ?: error("未配置信任根，无法验证包签名")
+        val root = trustStore.loadRoot() ?: error("trust root not configured; cannot verify package signature")
         val block = PackageSigner.parseBlock(signatureJson)
         return PackageSigner.verifyLbpa(
             block = block,
@@ -617,7 +617,7 @@ class LinuxInstaller(
             payloadHashHex = parsed.payloadSha256(),
             root = root,
             packageName = parsed.packageName,
-        ).getOrElse { error(it.message ?: "签名无效") }.subject
+        ).getOrElse { error(it.message ?: "signature is invalid") }.subject
     }
 
     private fun scanScripts(
@@ -631,7 +631,7 @@ class LinuxInstaller(
             val report = PackageScanner.scanText("$label/$name", bytes.toString(Charsets.UTF_8))
             if (report.blocked) {
                 val finding = report.findings.first { it.severity == Severity.BLOCK }
-                error("恶意检测拦截：${finding.rule} @ ${finding.file}:${finding.line}")
+                error("malware blocked: ${finding.rule} @ ${finding.file}:${finding.line}")
             }
             report.findings.forEach { onLog("[scan] ${it.severity} ${it.rule} @ ${it.file}:${it.line}") }
         }

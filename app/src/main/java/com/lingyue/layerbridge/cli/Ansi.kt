@@ -19,9 +19,9 @@ internal object Ansi {
 
     /** 按关键字给一行日志上色。 */
     fun line(text: String): String = when {
-        text.contains("失败") || text.contains("错误") -> red(text)
-        text.contains("安装完成") || text.contains("已安装") || text.contains("done:") -> green(text)
-        text.contains("跳过") || text.contains("未签名") || text.contains("警告") -> yellow(text)
+        text.contains("failed") || text.contains("error") -> red(text)
+        text.contains("installed") || text.contains("done") || text.contains("complete") -> green(text)
+        text.contains("skipped") || text.contains("unsigned") || text.contains("warning") -> yellow(text)
         text.startsWith("[lb]   ") -> dim(text)
         else -> text
     }

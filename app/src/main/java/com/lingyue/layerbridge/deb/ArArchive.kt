@@ -29,10 +29,10 @@ class ArArchive private constructor(
         @Throws(IOException::class)
         fun parse(file: File): ArArchive {
             RandomAccessFile(file, "r").use { raf ->
-                if (raf.length() < 8) throw IOException("ar 文件过短")
+                if (raf.length() < 8) throw IOException("ar file is too short")
                 val magic = ByteArray(8)
                 raf.readFully(magic)
-                if (String(magic, Charsets.US_ASCII) != MAGIC) throw IOException("不是 ar 归档")
+                if (String(magic, Charsets.US_ASCII) != MAGIC) throw IOException("not an ar archive")
 
                 val entries = mutableListOf<ArEntry>()
                 var cursor = 8L
@@ -45,15 +45,15 @@ class ArArchive private constructor(
                     val sizeText = String(header, 48, 10, Charsets.US_ASCII).trim()
                     if (name.isEmpty()) break
                     val size = sizeText.toLongOrNull()
-                        ?: throw IOException("ar 条目大小非法：$sizeText")
-                    if (size < 0) throw IOException("ar 条目大小为负")
+                        ?: throw IOException("invalid ar entry size: $sizeText")
+                    if (size < 0) throw IOException("ar entry size is negative")
                     val dataOffset = cursor + HEADER_SIZE
-                    if (dataOffset + size > length) throw IOException("ar 条目越界：$name")
+                    if (dataOffset + size > length) throw IOException("ar entry out of bounds: $name")
 
                     entries += ArEntry(name, dataOffset, size)
                     cursor = dataOffset + size + (size % 2)
                 }
-                if (entries.isEmpty()) throw IOException("ar 归档为空")
+                if (entries.isEmpty()) throw IOException("ar archive is empty")
                 return ArArchive(file, entries)
             }
         }
@@ -62,7 +62,7 @@ class ArArchive private constructor(
             var remaining = count
             while (remaining > 0) {
                 val skipped = skip(remaining)
-                if (skipped <= 0) throw IOException("无法定位到 ar 条目")
+                if (skipped <= 0) throw IOException("cannot locate ar entry")
                 remaining -= skipped
             }
         }

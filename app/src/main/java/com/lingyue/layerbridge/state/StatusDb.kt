@@ -75,7 +75,7 @@ class StatusDb(
     suspend fun versionOf(name: String): String? = find(name)?.version
 
     suspend fun writeFileList(name: String, paths: List<String>) {
-        require(PathGuard.isPackageName(name)) { "非法包名：$name" }
+        require(PathGuard.isPackageName(name)) { "invalid package name: $name" }
         val valid = paths.filter { PathGuard.isRelativePath(it) }.distinct()
         storage.writeText(listPath(name), valid.joinToString("\n", postfix = "\n"))
     }
@@ -92,7 +92,7 @@ class StatusDb(
             .filter { it.isNotEmpty() && PathGuard.isRelativePath(it) }
 
     suspend fun writePreservedData(name: String, paths: List<String>) {
-        require(PathGuard.isPackageName(name)) { "非法包名：$name" }
+        require(PathGuard.isPackageName(name)) { "invalid package name: $name" }
         if (paths.isEmpty()) {
             storage.delete(dataPath(name))
             return
@@ -105,12 +105,12 @@ class StatusDb(
     }
 
     suspend fun beginTransaction(name: String, version: String) {
-        require(PathGuard.isPackageName(name)) { "非法包名：$name" }
+        require(PathGuard.isPackageName(name)) { "invalid package name: $name" }
         writeTransaction(InstallTransaction(name, version, PHASE_BEGIN))
     }
 
     suspend fun recordTransaction(transaction: InstallTransaction) {
-        require(PathGuard.isPackageName(transaction.packageName)) { "非法包名：${transaction.packageName}" }
+        require(PathGuard.isPackageName(transaction.packageName)) { "invalid package name: ${transaction.packageName}" }
         writeTransaction(transaction)
     }
 

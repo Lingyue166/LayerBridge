@@ -12,7 +12,7 @@ import com.lingyue.layerbridge.state.PackageRelations
 object ConflictCheck {
 
     data class Conflict(val packageName: String, val other: String, val reason: String) {
-        val message: String get() = "$packageName 与 $other 冲突：$reason"
+        val message: String get() = "$packageName conflicts with $other: $reason"
     }
 
     fun find(

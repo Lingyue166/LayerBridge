@@ -110,15 +110,15 @@ object LbMain {
     }
 
     private fun doctor(): Int {
-        println("uid: ${uid()}（0=root）")
-        println("前缀: ${LbPaths.PREFIX} exists=${File(LbPaths.PREFIX).isDirectory}")
+        println("uid: ${uid()} (0=root)")
+        println("prefix: ${LbPaths.PREFIX} exists=${File(LbPaths.PREFIX).isDirectory}")
         println("env.sh: ${File(LbPaths.ENV_FILE).isFile}")
         println("db: ${File("${LbPaths.DB_DIR}/installed.tsv").isFile}")
         println("trust: ${File("${LbPaths.TRUST_DIR}/root.json").isFile}")
         println("expose: ${if (File(LbPaths.EXPOSE_FLAG).isFile) "system（命令暴露到 /system/bin，可被检测）" else "stealth（仅 root 可见）"}")
-        println("前缀权限: ${lsLine(LbPaths.BASE)}")
+        println("prefix mode: ${lsLine(LbPaths.BASE)}")
         println("overlay: ${if (overlayMounted()) LbText.current(T.OVERLAY_MOUNTED) else LbText.current(T.OVERLAY_NONE)}")
-        println("root-links: ${rootLinkCount()} 个（lb expose-root --remove 可关闭）")
+        println("root-links: ${rootLinkCount()} (lb expose-root --remove to disable)")
         println("module: ${File(LbPaths.MODULE_DIR).isDirectory}")
         println("apk: ${File("${LbPaths.BASE}/lb.apk").isFile}")
         println("entry: ${lsLine("/system/bin/lb")}")
@@ -202,7 +202,7 @@ object LbMain {
             plan.order.forEachIndexed { index, pkg ->
                 println(LbText.current(T.PLAN_ITEM, index + 1, pkg.name, pkg.version, pkg.format))
             }
-            if (!options.assumeYes && !confirm("继续安装？")) {
+            if (!options.assumeYes && !confirm("continue?")) {
                 println(Ansi.yellow(LbText.current(T.CANCELLED)))
                 return@runBlocking 1
             }
@@ -214,10 +214,10 @@ object LbMain {
             for (pkg in plan.order) {
                 val existing = installed[pkg.name]
                 if (existing != null) {
-                    println(Ansi.yellow("[lb] 跳过已安装: ${pkg.name} ${existing} (升级用 lb upgrade)"))
+                    LbLog.installer("[lb] skipped installed: ${pkg.name} ${existing} (use lb upgrade)")
                     continue
                 }
-                println(LbText.current(T.INSTALLING, pkg.name, pkg.version))
+                LbLog.info(LbText.current(T.INSTALLING, pkg.name, pkg.version))
                 val pkgStart = System.nanoTime()
                 val code = installOne(prepared, pkg.path, policy, requireInstalled = false, updateLinks = false)
                 if (code != 0) {
@@ -229,7 +229,7 @@ object LbMain {
             }
             prepared.refreshRootLinks()
             val totalMs = (System.nanoTime() - startedAt) / 1_000_000
-            println(Ansi.green("[lb] done: $installedCount packages, total ${totalMs} ms (${totalMs / 1000.0} s)"))
+            LbLog.info("[lb] done: $installedCount packages, total ${totalMs} ms (${totalMs / 1000.0} s)")
             0
         }
     }
@@ -255,14 +255,14 @@ object LbMain {
     ): Int {
         val result = when {
             file.name.endsWith(".deb", ignoreCase = true) ->
-                installer.installDeb(file, LOCAL_REPO, false, policy, requireInstalled, updateLinks) { println(Ansi.line(it)) }
+                installer.installDeb(file, LOCAL_REPO, false, policy, requireInstalled, updateLinks) { LbLog.installer(it) }
             file.name.endsWith(".lbpa", ignoreCase = true) ->
-                installer.installLbpa(file, LOCAL_REPO, false, policy, requireInstalled, updateLinks) { println(Ansi.line(it)) }
+                installer.installLbpa(file, LOCAL_REPO, false, policy, requireInstalled, updateLinks) { LbLog.installer(it) }
             else -> return fail(LbText.current(T.ERR_UNKNOWN_TYPE, file.name))
         }
         return result.fold(
-            onSuccess = { println(Ansi.green(LbText.current(T.INSTALL_DONE, it.name, it.version))); 0 },
-            onFailure = { println(Ansi.red(LbText.current(T.INSTALL_FAILED_ITEM, it.message.orEmpty()))); 1 },
+            onSuccess = { LbLog.info(LbText.current(T.INSTALL_DONE, it.name, it.version)); 0 },
+            onFailure = { LbLog.error(LbText.current(T.INSTALL_FAILED_ITEM, it.message.orEmpty())); 1 },
         )
     }
 
@@ -270,10 +270,10 @@ object LbMain {
         when {
             LbpaFile.isLbpa(file) -> {
                 val manifest = LbpaFile.parse(file).manifest
-                val info = manifest.packageInfo ?: error("缺少 package")
+                val info = manifest.packageInfo ?: error("missing package")
                 LocalPackage(
-                    name = info.name ?: error("缺少包名"),
-                    version = info.version ?: error("缺少版本"),
+                    name = info.name ?: error("missing package name"),
+                    version = info.version ?: error("missing version"),
                     architecture = info.architecture ?: "aarch64",
                     format = "lbpa",
                     path = file,
@@ -287,8 +287,8 @@ object LbMain {
             DebFile.isDeb(file) -> {
                 val control = DebFile(file).readControl()
                 LocalPackage(
-                    name = control.packageName ?: error("缺少 Package"),
-                    version = control.version ?: error("缺少 Version"),
+                    name = control.packageName ?: error("missing Package"),
+                    version = control.version ?: error("missing Version"),
                     architecture = control.architecture ?: "aarch64",
                     format = "deb",
                     path = file,
@@ -318,7 +318,7 @@ object LbMain {
         val force = forceByCommand || options.force
 
         return runBlocking {
-            createInstaller().uninstall(name, force) { println(Ansi.line(it)) }.fold(
+            createInstaller().uninstall(name, force) { LbLog.installer(it) }.fold(
                 onSuccess = { println(LbText.current(T.REMOVED, name)); 0 },
                 onFailure = { println(LbText.current(T.ERR_UNINSTALL_FAILED, it.message.orEmpty())); 1 },
             )
@@ -507,12 +507,12 @@ object LbMain {
     }.getOrDefault("?")
 
     private fun usageError(message: String): Int {
-        System.err.println(Ansi.red(message))
+        LbLog.error(message)
         return 2
     }
 
     private fun fail(message: String): Int {
-        System.err.println(Ansi.red("lb: $message"))
+        LbLog.error("lb: $message")
         return 1
     }
 

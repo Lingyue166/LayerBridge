@@ -17,9 +17,9 @@ class DebFile(val file: File) {
     val archive: ArArchive = ArArchive.parse(file)
 
     private val controlEntry = archive.entries.firstOrNull { it.name.startsWith("control.tar") }
-        ?: throw IllegalArgumentException(".deb 缺少 control.tar")
+        ?: throw IllegalArgumentException(".deb is missing control.tar")
     private val dataEntry = archive.entries.firstOrNull { it.name.startsWith("data.tar") }
-        ?: throw IllegalArgumentException(".deb 缺少 data.tar")
+        ?: throw IllegalArgumentException(".deb is missing data.tar")
 
     fun readControl(): DebControl {
         val scripts = mutableMapOf<String, ByteArray>()
@@ -62,7 +62,7 @@ class DebFile(val file: File) {
             entry.name.endsWith(".gz") -> GZIPInputStream(raw)
             entry.name.endsWith(".xz") -> XZInputStream(raw)
             entry.name.endsWith(".tar") -> raw
-            else -> throw IllegalArgumentException("不支持的压缩格式：${entry.name}")
+            else -> throw IllegalArgumentException("unsupported compression: ${entry.name}")
         }
     }
 

@@ -42,7 +42,7 @@ class ShellTest {
         val elapsed = System.currentTimeMillis() - startedAt
 
         assertEquals(-1, result.exitCode)
-        assertTrue(result.output, result.output.contains("命令超时"))
+        assertTrue(result.output, result.output.contains("command timed out"))
         assertTrue("实际耗时 ${elapsed}ms", elapsed < 5_000)
     }
 

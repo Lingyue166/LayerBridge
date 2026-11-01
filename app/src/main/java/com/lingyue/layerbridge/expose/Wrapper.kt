@@ -18,8 +18,8 @@ object Wrapper {
         extraEnv: Map<String, String> = emptyMap(),
         owner: String? = null,
     ): String {
-        require(PathGuard.isRelativePath(commandPath)) { "非法命令路径：$commandPath" }
-        require(owner == null || PathGuard.isPackageName(owner)) { "非法包名：$owner" }
+        require(PathGuard.isRelativePath(commandPath)) { "invalid command path: $commandPath" }
+        require(owner == null || PathGuard.isPackageName(owner)) { "invalid package name: $owner" }
         val envLines = extraEnv
             .filterKeys { it !in RESERVED_ENV && it.matches(Regex("^[A-Za-z_][A-Za-z0-9_]*$")) }
             .map { (key, value) -> "export $key=${PathGuard.quote(value)}" }

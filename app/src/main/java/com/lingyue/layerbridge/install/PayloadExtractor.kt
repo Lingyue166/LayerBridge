@@ -36,7 +36,7 @@ object PayloadExtractor {
                     when {
                         name.startsWith("control/") || name == "control" -> null
                         name.startsWith("files/") -> PayloadPath.normalize(name.removePrefix("files/"))
-                        else -> error("未知 payload 路径：$raw")
+                        else -> error("unknown payload path: $raw")
                     }
                 }
             }
@@ -71,8 +71,8 @@ object PayloadExtractor {
                 body(tar, paths)
             }
         }
-        if (!result.isSuccess) error("解包失败：${result.output}")
-        onLog("[lb] 解包完成：${paths.size} 个文件")
+        if (!result.isSuccess) error("extract failed: ${result.output}")
+        onLog("[lb] extracted ${paths.size} files")
         return paths
     }
 
@@ -162,7 +162,7 @@ object PayloadExtractor {
         val input = when (compression) {
             "xz" -> XZInputStream(lbpa.payloadStream())
             "gzip" -> GZIPInputStream(lbpa.payloadStream())
-            else -> error("不支持的压缩：$compression")
+            else -> error("unsupported compression: $compression")
         }
         return TarArchiveInputStream(input)
     }

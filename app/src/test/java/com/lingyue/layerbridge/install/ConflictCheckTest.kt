@@ -46,7 +46,7 @@ class ConflictCheckTest {
             listOf(installed("oldpkg")),
         )
 
-        assertEquals("newpkg 与 oldpkg 冲突：Conflicts: oldpkg", conflict?.message)
+        assertEquals("newpkg conflicts with oldpkg: Conflicts: oldpkg", conflict?.message)
     }
 
     @Test
@@ -58,7 +58,7 @@ class ConflictCheckTest {
             listOf(installed("oldpkg", relations = PackageRelations(conflicts = "newpkg"))),
         )
 
-        assertEquals("oldpkg 与 newpkg 冲突：Conflicts: newpkg", conflict?.message)
+        assertEquals("oldpkg conflicts with newpkg: Conflicts: newpkg", conflict?.message)
     }
 
     @Test
@@ -77,7 +77,7 @@ class ConflictCheckTest {
             PackageRelations(breaks = "virtual-api"),
             listOf(installed("oldpkg", relations = PackageRelations(provides = "virtual-api"))),
         )
-        assertEquals("newpkg 与 oldpkg 冲突：Breaks: virtual-api", viaProvides?.message)
+        assertEquals("newpkg conflicts with oldpkg: Breaks: virtual-api", viaProvides?.message)
     }
 
     @Test
