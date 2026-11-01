@@ -19,8 +19,17 @@ object Shell {
 
     internal const val MAX_OUTPUT = 1024 * 1024
 
-    /** 默认执行器；测试可直接注入 `sh -c`。 */
-    internal val DEFAULT_LAUNCHER = listOf("su", "-c")
+    /** 默认执行器：已是 root 就直接起 sh，省掉每次 su 的进程开销；测试可注入。 */
+    internal var DEFAULT_LAUNCHER: List<String> = detectLauncher()
+
+    private fun detectLauncher(): List<String> = runCatching {
+        val uid = java.io.File("/proc/self/status").readLines()
+            .firstOrNull { it.startsWith("Uid:") }
+            ?.split(Regex("\\s+"))
+            ?.getOrNull(1)
+            ?.toIntOrNull()
+        if (uid == 0) listOf("sh", "-c") else listOf("su", "-c")
+    }.getOrDefault(listOf("su", "-c"))
 
     suspend fun isRoot(): Boolean = withContext(Dispatchers.IO) {
         runCatching { exec("id -u", timeoutMs = 10_000).output.trim() == "0" }.getOrDefault(false)
