@@ -30,6 +30,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.draw.alpha
+import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import com.lingyue.layerbridge.R
 import com.lingyue.layerbridge.state.InstalledPackage
 import com.lingyue.layerbridge.ui.components.CardActionButton
@@ -201,6 +206,7 @@ internal fun PackageDialogs(
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 internal fun PackageCard(
     pkg: InstalledPackage,
@@ -208,11 +214,24 @@ internal fun PackageCard(
     query: String,
     onClick: () -> Unit,
     onRemove: () -> Unit,
+    highlighted: Boolean = false,
+    dimmed: Boolean = false,
+    onDoubleTap: (() -> Unit)? = null,
 ) {
-    Card(
-        onClick = onClick,
-        modifier = Modifier.width(metrics.cardWidth).height(metrics.cardHeight),
-    ) {
+    val baseModifier = Modifier
+        .width(metrics.cardWidth)
+        .height(metrics.cardHeight)
+        .alpha(if (dimmed) 0.3f else 1f)
+        .then(
+            if (highlighted) {
+                Modifier.border(
+                    2.dp,
+                    MiuixTheme.colorScheme.primary,
+                    androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
+                )
+            } else Modifier,
+        )
+    val content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit = {
         Column(Modifier.fillMaxSize()) {
             Column(
                 modifier = Modifier
@@ -262,6 +281,21 @@ internal fun PackageCard(
                 )
             }
         }
+    }
+    if (onDoubleTap != null) {
+        Card(
+            modifier = baseModifier.combinedClickable(
+                onClick = onClick,
+                onDoubleClick = onDoubleTap,
+            ),
+            content = content,
+        )
+    } else {
+        Card(
+            onClick = onClick,
+            modifier = baseModifier,
+            content = content,
+        )
     }
 }
 

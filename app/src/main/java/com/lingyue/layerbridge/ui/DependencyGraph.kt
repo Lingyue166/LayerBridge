@@ -93,6 +93,31 @@ internal fun DependencyGraph(state: UiState, viewModel: MainViewModel, modifier:
     }
     val byName = remember(installed) { installed.associateBy { it.name } }
     var detail by remember { mutableStateOf<InstalledPackage?>(null) }
+    var selected by remember { mutableStateOf<String?>(null) }
+    val dependents = remember(layout) {
+        val reverses = mutableMapOf<String, MutableList<String>>()
+        installed.forEach { pkg ->
+            parseDependencyNames(pkg.relations.depends)
+                .filter { name -> installed.any { it.name == name } && name != pkg.name }
+                .distinct()
+                .forEach { dependency ->
+                    reverses.getOrPut(dependency) { mutableListOf() } += pkg.name
+                }
+        }
+        reverses
+    }
+    val highlightSet = remember(selected, dependents) {
+        val target = selected ?: return@remember emptySet<String>()
+        val result = mutableSetOf(target)
+        val queue = ArrayDeque(listOf(target))
+        while (queue.isNotEmpty()) {
+            val current = queue.removeFirst()
+            dependents[current].orEmpty().forEach { dependent ->
+                if (result.add(dependent)) queue += dependent
+            }
+        }
+        result
+    }
     var pendingRemove by remember { mutableStateOf<InstalledPackage?>(null) }
 
     var viewport by remember { mutableStateOf(IntSize.Zero) }
@@ -138,10 +163,19 @@ internal fun DependencyGraph(state: UiState, viewModel: MainViewModel, modifier:
                     scale = newScale
                 }
             }
-            .pointerInput(layout) {
-                detectTapGestures(onDoubleTap = { fit() })
-            },
+
     ) {
+        // 空白区域：单击取消搜索高亮 双击回到适配视图
+        Box(
+            Modifier
+                .fillMaxSize()
+                .pointerInput(layout) {
+                    detectTapGestures(
+                        onTap = { viewModel.setQuery("") },
+                        onDoubleTap = { fit() },
+                    )
+                },
+        )
         Box(
             Modifier
                 .graphicsLayer {
@@ -159,6 +193,7 @@ internal fun DependencyGraph(state: UiState, viewModel: MainViewModel, modifier:
             val stroke = with(density) { 2.dp.toPx() }
             val lineColor = MiuixTheme.colorScheme.onSurfaceVariantSummary
             val dotColor = MiuixTheme.colorScheme.primary
+            val highlightColor = MiuixTheme.colorScheme.primary
             Canvas(Modifier.size((layout.width + PAD_DP * 2).dp, (layout.height + PAD_DP * 2).dp)) {
                 layout.edges.forEach { edge ->
                     val points = edge.points
@@ -170,10 +205,20 @@ internal fun DependencyGraph(state: UiState, viewModel: MainViewModel, modifier:
                     val endX = with(density) { (end.first + PAD_DP).dp.toPx() }
                     val endY = with(density) { (end.second + PAD_DP).dp.toPx() }
                     val control = (endX - startX) / 2f
+                    val fromNode = layout.nodes.firstOrNull {
+                        it.x + it.width == start.first && it.y + it.height / 2 == start.second
+                    }
+                    val toNode = layout.nodes.firstOrNull {
+                        it.x == end.first && it.y + it.height / 2 == end.second
+                    }
+                    val active = selected == null ||
+                        (fromNode?.id in highlightSet && toNode?.id in highlightSet)
+                    val color = if (selected != null && active) highlightColor else lineColor
+                    val width = if (selected != null && active) stroke * 1.6f else stroke
                     val path = Path()
                     path.moveTo(startX, startY)
                     path.cubicTo(startX + control, startY, endX - control, endY, endX, endY)
-                    drawPath(path, color = lineColor, style = Stroke(width = stroke))
+                    drawPath(path, color = color, style = Stroke(width = width))
                     // 箭头指向被依赖方 A（依赖 A -> B，箭头落在 A 的右缘）
                     val arrowSize = with(density) { 7.dp.toPx() }
                     val arrow = Path().apply {
@@ -182,17 +227,15 @@ internal fun DependencyGraph(state: UiState, viewModel: MainViewModel, modifier:
                         lineTo(startX + arrowSize, startY + arrowSize * 0.6f)
                         close()
                     }
-                    drawPath(arrow, color = lineColor)
+                    drawPath(arrow, color = color)
                 }
             }
             layout.nodes.forEach { node ->
                 val pkg = byName[node.id] ?: return@forEach
-                val matched = state.query.isBlank() || node.id.contains(state.query.trim(), ignoreCase = true)
                 Box(
                     Modifier
                         .offset((node.x + PAD_DP).dp, (node.y + PAD_DP).dp)
-                        .size(metrics.cardWidth, metrics.cardHeight)
-                        .alpha(if (matched) 1f else 0.3f),
+                        .size(metrics.cardWidth, metrics.cardHeight),
                 ) {
                     PackageCard(
                         pkg = pkg,
@@ -200,6 +243,9 @@ internal fun DependencyGraph(state: UiState, viewModel: MainViewModel, modifier:
                         query = state.query,
                         onClick = { detail = pkg },
                         onRemove = { pendingRemove = pkg },
+                        highlighted = selected != null && node.id in highlightSet,
+                        dimmed = selected != null && node.id !in highlightSet,
+                        onDoubleTap = { selected = if (selected == node.id) null else node.id },
                     )
                 }
             }
