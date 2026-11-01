@@ -1,12 +1,11 @@
 package com.lingyue.layerbridge.ui.graph
 
 /**
- * 分层布局（Sugiyama / dagre 思路）：
- * 去环 -> 最长路径分层 -> 长边插虚拟节点 -> 重心排序减少交叉 ->
- * 按层间连线数量动态加宽间距并为每条线分配独立通道 -> 层内坐标按邻居中位数对齐。
- * 纯函数 便于单元测试。
+ * 分层布局 + 正交线路由（Sugiyama / dagre 思路）。
+ * 去环 -> 最长路径分层 -> 虚拟节点排序 -> 重心法减少交叉 ->
+ * 每个层间隙按目标节点分组分配互不重叠的竖直通道 -> 卡片端口分散 ->
+ * 正交折线从卡片右缘端口出发 经通道 连到左缘端口。
  */
-
 data class GraphNodeInput(
     val id: String,
     val width: Float = 100f,
@@ -37,70 +36,70 @@ object LayeredLayout {
     fun layout(
         nodes: List<GraphNodeInput>,
         edges: List<GraphEdgeInput>,
-        layerGap: Float = 96f,
+        layerPadding: Float = 28f,
+        channelWidth: Float = 16f,
         nodeGap: Float = 28f,
-        channelGap: Float = 16f,
     ): LayeredLayoutResult {
         if (nodes.isEmpty()) return LayeredLayoutResult(emptyList(), emptyList(), 0f, 0f)
-        val ids = nodes.map { it.id }.toSet()
-        val clean = edges
-            .filter { it.from in ids && it.to in ids && it.from != it.to }
-            .distinct()
-
+        val nodeById = nodes.associateBy { it.id }
+        val ids = nodeById.keys
+        val clean = edges.filter { it.from in ids && it.to in ids && it.from != it.to }.distinct()
         val acyclic = removeCycles(nodes.map { it.id }, clean)
         val ranks = assignRanks(nodes.map { it.id }, acyclic)
+        val heightById = nodes.associate { it.id to it.height }.toMutableMap()
 
-        // 每条原始边拆成相邻层之间的链 记录经过的节点（含虚拟节点）
+        // 每条原始边在层间链上的节点序列
         val chains = mutableListOf<List<String>>()
         val segEdges = mutableListOf<GraphEdgeInput>()
         var dummySeq = 0
         acyclic.forEach { edge ->
-            val fromRank = ranks[edge.from] ?: 0
-            val toRank = ranks[edge.to] ?: 0
+            val fromRank = ranks.getValue(edge.from)
+            val toRank = ranks.getValue(edge.to)
             val chain = mutableListOf(edge.from)
             for (rank in fromRank + 1 until toRank) {
                 val dummyId = "\u0000d${dummySeq++}"
                 ranks[dummyId] = rank
                 chain += dummyId
+                heightById[dummyId] = 4f
             }
             chain += edge.to
             chains += chain
             chain.zipWithNext { a, b -> segEdges += GraphEdgeInput(a, b) }
         }
 
-        val allIds = nodes.map { it.id } + ranks.keys.filter { it.startsWith("\u0000d") }
+        val dummyIds = ranks.keys.filter { it.startsWith("\u0000d") }
+        val allIds = nodes.map { it.id } + dummyIds
         val layerCount = (ranks.values.maxOrNull() ?: 0) + 1
         val layers = MutableList(layerCount) { mutableListOf<String>() }
-        allIds.sorted().forEach { id -> layers[ranks[id] ?: 0] += id }
-
+        allIds.sorted().forEach { id -> layers[ranks.getValue(id)] += id }
         orderLayers(layers, segEdges)
 
-        val widthByLayer = FloatArray(layerCount)
-        layers.forEachIndexed { layer, layerIds ->
-            widthByLayer[layer] = layerIds.maxOfOrNull { id ->
-                nodes.firstOrNull { it.id == id }?.width ?: 4f
-            } ?: 4f
-        }
-        val heightById = allIds.associateWith { id ->
-            nodes.firstOrNull { it.id == id }?.height ?: 4f
+        val widthByLayer = FloatArray(layerCount) { layer ->
+            layers[layer].maxOfOrNull { id -> nodeById[id]?.width ?: 4f } ?: 4f
         }
 
-        // 每条原始边经过的间隙顺序
-        val edgeSpans = chains.map { chain ->
-            (0 until chain.size - 1).map { i -> ranks.getValue(chain[i]) }
+        // 每个层间隙的通道分组：按下一跳目标节点归并 避免线宽随边数爆炸
+        val gapGroups = List(layerCount) { mutableListOf<String>() }
+        fun gapTargets(chain: List<String>, gap: Int): String =
+            chain.firstOrNull { ranks.getValue(it) == gap + 1 } ?: chain.last()
+
+        chains.forEach { chain ->
+            val fromRank = ranks.getValue(chain.first())
+            val toRank = ranks.getValue(chain.last())
+            for (gap in fromRank until toRank) {
+                val target = gapTargets(chain, gap)
+                if (target !in gapGroups[gap]) gapGroups[gap] += target
+            }
         }
-        val gapCount = IntArray((layerCount - 1).coerceAtLeast(0))
-        edgeSpans.forEach { spans ->
-            spans.forEach { gap -> if (gap in gapCount.indices) gapCount[gap]++ }
-        }
-        val gapWidth = FloatArray(gapCount.size) { g ->
-            layerGap + (gapCount[g] - 1).coerceAtLeast(0) * channelGap
+        val gapWidth = FloatArray((layerCount - 1).coerceAtLeast(0)) { gap ->
+            layerPadding * 2 + gapGroups[gap].size * channelWidth
         }
         val xOf = FloatArray(layerCount)
-        for (g in 0 until layerCount - 1) {
-            xOf[g + 1] = xOf[g] + widthByLayer[g] + gapWidth[g]
+        for (gap in 0 until layerCount - 1) {
+            xOf[gap + 1] = xOf[gap] + widthByLayer[gap] + gapWidth[gap]
         }
 
+        // 层内纵向坐标
         val yOf = mutableMapOf<String, Float>()
         layers.forEach { layerIds ->
             var y = 0f
@@ -109,7 +108,6 @@ object LayeredLayout {
                 y += heightById.getValue(id) + nodeGap
             }
         }
-
         val preds = mutableMapOf<String, MutableList<String>>()
         val succs = mutableMapOf<String, MutableList<String>>()
         segEdges.forEach { edge ->
@@ -133,62 +131,80 @@ object LayeredLayout {
             }
         }
 
-        // 通道分配：同一间隙内按线的 y 排序平均分布 间距随线数增大
-        val slotX = mutableMapOf<Pair<Int, Int>, Float>()
-        val slotY = mutableMapOf<Pair<Int, Int>, Float>()
-        val centerById = allIds.associateWith { id -> yOf.getValue(id) + heightById.getValue(id) / 2 }
-        edgeSpans.forEachIndexed { edgeIndex, spans ->
-            val chain = chains[edgeIndex]
-            val fromRank = ranks.getValue(chain.first())
-            val toRank = ranks.getValue(chain.last())
-            spans.forEach { gap ->
-                val progress = ((gap + 1 - fromRank).toFloat()) / (toRank - fromRank).coerceAtLeast(1)
-                val y = centerById.getValue(chain.first()) +
-                    (centerById.getValue(chain.last()) - centerById.getValue(chain.first())) * progress
-                slotX[edgeIndex to gap] = xOf[gap] + widthByLayer[gap] + 0f
-                slotY[edgeIndex to gap] = y
-            }
-        }
-        // 每个间隙按 y 排序后重新分配 x
-        (0 until gapCount.size).forEach { gap ->
-            val entries = edgeSpans.indices
-                .filter { gap in edgeSpans[it] }
-                .map { it to slotY.getValue(it to gap) }
-                .sortedBy { it.second }
-            val left = xOf[gap] + widthByLayer[gap]
-            val width = gapWidth[gap]
-            entries.forEachIndexed { index, (edgeIndex, _) ->
-                slotX[edgeIndex to gap] = left + width * (index + 1) / (entries.size + 1)
-            }
-        }
-
-        val placed = allIds.filter { !it.startsWith("\u0000d") }.mapNotNull { id ->
-            val input = nodes.first { it.id == id }
+        val placed = nodes.map { input ->
+            val rank = ranks.getValue(input.id)
             PlacedNode(
-                id = id,
-                x = xOf[ranks.getValue(id)] + (widthByLayer[ranks.getValue(id)] - input.width) / 2f,
-                y = yOf.getValue(id),
+                id = input.id,
+                x = xOf[rank] + (widthByLayer[rank] - input.width) / 2f,
+                y = yOf.getValue(input.id),
                 width = input.width,
                 height = input.height,
             )
         }
         val posById = placed.associateBy { it.id }
+        val centerY = posById.mapValues { (_, node) -> node.y + node.height / 2 }
 
-        val placedEdges = chains.mapIndexedNotNull { edgeIndex, chain ->
-            val from = posById[chain.first()] ?: return@mapIndexedNotNull null
-            val to = posById[chain.last()] ?: return@mapIndexedNotNull null
-            val points = mutableListOf(
-                (from.x + from.width) to (from.y + from.height / 2),
-            )
-            edgeSpans[edgeIndex].forEach { gap ->
-                points += slotX.getValue(edgeIndex to gap) to slotY.getValue(edgeIndex to gap)
+        // 通道 x：同一间隙内按目标节点中心 y 排序 均分
+        val laneX = mutableMapOf<Pair<Int, String>, Float>()
+        for (gap in 0 until layerCount - 1) {
+            val ordered = gapGroups[gap].sortedBy { centerY[it] ?: Float.MAX_VALUE }
+            val left = xOf[gap] + widthByLayer[gap] + layerPadding
+            ordered.forEachIndexed { index, target ->
+                laneX[gap to target] = left + index * channelWidth
             }
-            points += to.x to (to.y + to.height / 2)
+        }
+
+        // 端口：同一卡片出边/入边分散到右缘/左缘不同高度
+        val outEdges = mutableMapOf<String, MutableList<Int>>()
+        val inEdges = mutableMapOf<String, MutableList<Int>>()
+        chains.forEachIndexed { index, chain ->
+            outEdges.getOrPut(chain.first()) { mutableListOf() } += index
+            inEdges.getOrPut(chain.last()) { mutableListOf() } += index
+        }
+        val outPort = mutableMapOf<Int, Float>()
+        val inPort = mutableMapOf<Int, Float>()
+        fun assignPorts(nodeId: String, edgeIndexes: List<Int>, map: MutableMap<Int, Float>, otherFirst: Boolean) {
+            val node = posById[nodeId] ?: return
+            val center = node.y + node.height / 2
+            val sorted = edgeIndexes.sortedBy { index ->
+                val chain = chains[index]
+                val otherId = if (otherFirst) chain.first() else chain.last()
+                centerY[otherId] ?: center
+            }
+            val n = sorted.size
+            val usable = (node.height - 16f).coerceAtLeast(8f)
+            val spacing = if (n <= 1) 0f else minOf(12f, usable / (n - 1))
+            sorted.forEachIndexed { i, index ->
+                val offset = if (n == 1) 0f else (i - (n - 1) / 2f) * spacing
+                map[index] = (center + offset).coerceIn(node.y + 8f, node.y + node.height - 8f)
+            }
+        }
+        outEdges.forEach { (nodeId, list) -> assignPorts(nodeId, list, outPort, otherFirst = false) }
+        inEdges.forEach { (nodeId, list) -> assignPorts(nodeId, list, inPort, otherFirst = true) }
+
+        val placedEdges = chains.mapIndexed { index, chain ->
+            val from = posById.getValue(chain.first())
+            val to = posById.getValue(chain.last())
+            val fromRank = ranks.getValue(chain.first())
+            val toRank = ranks.getValue(chain.last())
+            val startY = outPort.getValue(index)
+            val endY = inPort.getValue(index)
+            val points = mutableListOf((from.x + from.width) to startY)
+            var currentY = startY
+            for (gap in fromRank until toRank) {
+                val target = gapTargets(chain, gap)
+                val lane = laneX.getValue(gap to target)
+                points += lane to currentY
+                val progress = (gap + 1 - fromRank).toFloat() / (toRank - fromRank).toFloat()
+                currentY = startY + (endY - startY) * progress
+                points += lane to currentY
+            }
+            points += to.x to endY
             PlacedEdge(points)
         }
 
-        val contentWidth = (placed.maxOfOrNull { it.x + it.width } ?: 0f)
-        val contentHeight = (placed.maxOfOrNull { it.y + it.height } ?: 0f)
+        val contentWidth = placed.maxOfOrNull { it.x + it.width } ?: 0f
+        val contentHeight = placed.maxOfOrNull { it.y + it.height } ?: 0f
         return LayeredLayoutResult(placed, placedEdges, contentWidth, contentHeight)
     }
 
@@ -239,7 +255,6 @@ object LayeredLayout {
             preds.getOrPut(edge.to) { mutableListOf() } += edge.from
         }
         fun indexOf(layer: List<String>): Map<String, Int> = layer.withIndex().associate { it.value to it.index }
-
         fun crossings(): Int {
             var total = 0
             for (layer in 0 until layers.size - 1) {
@@ -256,10 +271,8 @@ object LayeredLayout {
             }
             return total
         }
-
         var best = layers.map { it.toList() }
         var bestCrossings = crossings()
-
         repeat(4) {
             for (layer in 1 until layers.size) {
                 val upper = indexOf(layers[layer - 1])

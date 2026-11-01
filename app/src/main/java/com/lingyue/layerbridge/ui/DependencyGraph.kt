@@ -130,10 +130,9 @@ internal fun DependencyGraph(state: UiState, viewModel: MainViewModel, modifier:
                             with(density) { (point.first + PAD_DP).dp.toPx() },
                             with(density) { (point.second + PAD_DP).dp.toPx() },
                         )
-                        val midX = (current.x + end.x) / 2f
                         val path = Path()
                         path.moveTo(current.x, current.y)
-                        path.cubicTo(midX, current.y, midX, end.y, end.x, end.y)
+                        path.lineTo(end.x, end.y)
                         drawPath(path, color = lineColor, style = Stroke(width = stroke))
                         current = end
                     }
