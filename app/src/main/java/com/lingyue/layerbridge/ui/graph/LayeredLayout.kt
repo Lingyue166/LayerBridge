@@ -182,39 +182,16 @@ object LayeredLayout {
         outEdges.forEach { (nodeId, list) -> assignPorts(nodeId, list, outPort, otherFirst = false) }
         inEdges.forEach { (nodeId, list) -> assignPorts(nodeId, list, inPort, otherFirst = true) }
 
-        // 虚拟节点同样有坐标 线路由经过它们时不会横穿卡片
-        val allPos = mutableMapOf<String, PlacedNode>()
-        placed.forEach { allPos[it.id] = it }
-        dummyIds.forEach { id ->
-            val rank = ranks.getValue(id)
-            allPos[id] = PlacedNode(
-                id = id,
-                x = xOf[rank],
-                y = yOf.getValue(id),
-                width = 4f,
-                height = 4f,
-            )
-        }
-
+        // 直接连线：起点右缘端口 终点左缘端口 画成平滑 S 曲线 只有两个弯
         val placedEdges = chains.mapIndexed { index, chain ->
             val from = posById.getValue(chain.first())
-            val fromRank = ranks.getValue(chain.first())
-            val toRank = ranks.getValue(chain.last())
-            val startY = outPort.getValue(index)
-            val endY = inPort.getValue(index)
-            val points = mutableListOf((from.x + from.width) to startY)
-            var currentY = startY
-            for (gap in fromRank until toRank) {
-                val target = gapTargets(chain, gap)
-                val lane = laneX.getValue(gap to target)
-                val nextNode = allPos.getValue(chain[gap + 1 - fromRank])
-                val nextY = if (gap == toRank - 1) endY else nextNode.y + nextNode.height / 2
-                points += lane to currentY
-                points += lane to nextY
-                points += nextNode.x to nextY
-                currentY = nextY
-            }
-            PlacedEdge(points)
+            val to = posById.getValue(chain.last())
+            PlacedEdge(
+                listOf(
+                    (from.x + from.width) to outPort.getValue(index),
+                    to.x to inPort.getValue(index),
+                ),
+            )
         }
 
         val contentWidth = placed.maxOfOrNull { it.x + it.width } ?: 0f

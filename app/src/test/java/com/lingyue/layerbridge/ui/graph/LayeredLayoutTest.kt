@@ -36,7 +36,7 @@ class LayeredLayoutTest {
         )
         assertTrue(result.nodes.none { it.id.startsWith("\u0000") })
         assertTrue(result.nodes.any { it.id == "d" })
-        assertTrue(result.edges.any { it.points.size >= 3 })
+        assertTrue(result.edges.all { it.points.size == 2 })
         assertTrue(result.width > 0f)
     }
 
