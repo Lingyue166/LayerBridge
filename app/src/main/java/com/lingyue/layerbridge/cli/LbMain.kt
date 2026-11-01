@@ -188,22 +188,22 @@ object LbMain {
             val plan = LocalPlanner.plan(packages, installed)
             plan.cycle?.let { return@runBlocking fail(LbText.current(T.CYCLE, it)) }
             if (plan.missing.isNotEmpty()) {
-                println(LbText.current(T.MISSING_HEADER))
+                println(Ansi.red(LbText.current(T.MISSING_HEADER)))
                 plan.missing.forEach { println("  $it") }
                 return@runBlocking 1
             }
             if (plan.conflicts.isNotEmpty()) {
-                println(LbText.current(T.CONFLICT_HEADER))
+                println(Ansi.red(LbText.current(T.CONFLICT_HEADER)))
                 plan.conflicts.forEach { println("  $it") }
                 return@runBlocking 1
             }
 
-            println(LbText.current(T.PLAN_HEADER, plan.order.size))
+            println(Ansi.cyan(LbText.current(T.PLAN_HEADER, plan.order.size)))
             plan.order.forEachIndexed { index, pkg ->
                 println(LbText.current(T.PLAN_ITEM, index + 1, pkg.name, pkg.version, pkg.format))
             }
             if (!options.assumeYes && !confirm("继续安装？")) {
-                println(LbText.current(T.CANCELLED))
+                println(Ansi.yellow(LbText.current(T.CANCELLED)))
                 return@runBlocking 1
             }
 
@@ -214,7 +214,7 @@ object LbMain {
             for (pkg in plan.order) {
                 val existing = installed[pkg.name]
                 if (existing != null) {
-                    println("[lb] 跳过已安装：${pkg.name} ${existing}（升级用 lb upgrade）")
+                    println(Ansi.yellow("[lb] 跳过已安装: ${pkg.name} ${existing} (升级用 lb upgrade)"))
                     continue
                 }
                 println(LbText.current(T.INSTALLING, pkg.name, pkg.version))
@@ -229,7 +229,7 @@ object LbMain {
             }
             prepared.refreshRootLinks()
             val totalMs = (System.nanoTime() - startedAt) / 1_000_000
-            println("[lb] done: $installedCount packages, total ${totalMs} ms (${totalMs / 1000.0} s)")
+            println(Ansi.green("[lb] done: $installedCount packages, total ${totalMs} ms (${totalMs / 1000.0} s)"))
             0
         }
     }
@@ -255,14 +255,14 @@ object LbMain {
     ): Int {
         val result = when {
             file.name.endsWith(".deb", ignoreCase = true) ->
-                installer.installDeb(file, LOCAL_REPO, false, policy, requireInstalled, updateLinks) { println(it) }
+                installer.installDeb(file, LOCAL_REPO, false, policy, requireInstalled, updateLinks) { println(Ansi.line(it)) }
             file.name.endsWith(".lbpa", ignoreCase = true) ->
-                installer.installLbpa(file, LOCAL_REPO, false, policy, requireInstalled, updateLinks) { println(it) }
+                installer.installLbpa(file, LOCAL_REPO, false, policy, requireInstalled, updateLinks) { println(Ansi.line(it)) }
             else -> return fail(LbText.current(T.ERR_UNKNOWN_TYPE, file.name))
         }
         return result.fold(
-            onSuccess = { println(LbText.current(T.INSTALL_DONE, it.name, it.version)); 0 },
-            onFailure = { println(LbText.current(T.INSTALL_FAILED_ITEM, it.message.orEmpty())); 1 },
+            onSuccess = { println(Ansi.green(LbText.current(T.INSTALL_DONE, it.name, it.version))); 0 },
+            onFailure = { println(Ansi.red(LbText.current(T.INSTALL_FAILED_ITEM, it.message.orEmpty()))); 1 },
         )
     }
 
@@ -318,7 +318,7 @@ object LbMain {
         val force = forceByCommand || options.force
 
         return runBlocking {
-            createInstaller().uninstall(name, force) { println(it) }.fold(
+            createInstaller().uninstall(name, force) { println(Ansi.line(it)) }.fold(
                 onSuccess = { println(LbText.current(T.REMOVED, name)); 0 },
                 onFailure = { println(LbText.current(T.ERR_UNINSTALL_FAILED, it.message.orEmpty())); 1 },
             )
@@ -507,12 +507,12 @@ object LbMain {
     }.getOrDefault("?")
 
     private fun usageError(message: String): Int {
-        System.err.println(message)
+        System.err.println(Ansi.red(message))
         return 2
     }
 
     private fun fail(message: String): Int {
-        System.err.println("lb: $message")
+        System.err.println(Ansi.red("lb: $message"))
         return 1
     }
 
