@@ -98,4 +98,11 @@
     <string name="pkg_signer">Signer</string>
     <string name="pkg_scan">Scan</string>
     <string name="pkg_depends">Depends</string>
+
+    <string name="pkg_install_multiple">%1$d files selected, install all</string>
+    <string name="pkg_confirm_install">Install</string>
+
+    <string name="menu_cards">Card list</string>
+    <string name="menu_graph">Dependency graph</string>
+    <string name="menu_refresh">Refresh</string>
 </resources>

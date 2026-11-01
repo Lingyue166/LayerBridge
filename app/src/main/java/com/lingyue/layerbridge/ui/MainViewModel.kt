@@ -208,11 +208,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun refreshInstalled() {
+    fun refreshInstalled(onDone: () -> Unit = {}) {
         viewModelScope.launch {
             val installed = withContext(Dispatchers.IO) { statusDb.load() }
             _state.update { it.copy(installed = installed) }
             refreshRuntime()
+            onDone()
         }
     }
 

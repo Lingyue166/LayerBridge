@@ -1,6 +1,7 @@
 package com.lingyue.layerbridge.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
@@ -27,20 +28,21 @@ internal data class PackageCardMetrics(
 @Composable
 internal fun rememberPackageCardMetrics(): PackageCardMetrics {
     val widthDp = LocalConfiguration.current.screenWidthDp.dp
+    val density = LocalDensity.current
+    return remember(widthDp, density) {
     val margin = 16.dp
     val gap = if (widthDp < 360.dp) 8.dp else 12.dp
     val cardWidth = (widthDp - margin * 2 - gap) / 2
     val scale = (widthDp.value / 411f).coerceIn(0.9f, 1.0f)
     val nameSp = (16f * scale).sp
     val metaSp = (12f * scale).sp
-    val density = LocalDensity.current
     val nameLine = with(density) { (nameSp * 1.5f).toDp() }
     val metaLine = with(density) { (metaSp * 1.5f).toDp() }
     val padding = CardMetrics.InfoPadding
     val infoHeight = padding * 2 + nameLine + 4.dp + metaLine
     val actionHeight = CardMetrics.ActionHeight
     val buttonWidth = ((cardWidth - padding * 2 - CardMetrics.ButtonGap) / 2).coerceAtLeast(64.dp)
-    return PackageCardMetrics(
+    PackageCardMetrics(
         cardWidth = cardWidth,
         cardHeight = infoHeight + actionHeight + 1.dp,
         infoHeight = infoHeight,
@@ -53,4 +55,5 @@ internal fun rememberPackageCardMetrics(): PackageCardMetrics {
         nameSize = nameSp,
         metaSize = metaSp,
     )
+    }
 }

@@ -10,9 +10,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
-import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
-import androidx.compose.foundation.lazy.staggeredgrid.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -21,6 +21,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.lingyue.layerbridge.R
@@ -31,22 +36,37 @@ import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
+import top.yukonga.miuix.kmp.basic.PullToRefresh
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.basic.rememberPullToRefreshState
 import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
-fun PackagesPage(state: UiState, viewModel: MainViewModel, modifier: Modifier = Modifier) {
+fun PackagesPage(
+    state: UiState,
+    viewModel: MainViewModel,
+    graphMode: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    if (graphMode) {
+        DependencyGraph(state, viewModel, modifier)
+        return
+    }
     val metrics = rememberPackageCardMetrics()
     val packages = remember(state.installed, state.query) {
         val query = state.query.trim()
         if (query.isEmpty()) state.installed.sortedBy { it.name }
         else state.installed.filter { it.name.contains(query, ignoreCase = true) }.sortedBy { it.name }
     }
+    var refreshing by remember { mutableStateOf(false) }
+    val pullState = rememberPullToRefreshState()
     var detail by remember { mutableStateOf<InstalledPackage?>(null) }
     var pendingRemove by remember { mutableStateOf<InstalledPackage?>(null) }
+    val openDetail = remember { { pkg: InstalledPackage -> detail = pkg } }
+    val removeRequest = remember { { pkg: InstalledPackage -> pendingRemove = pkg } }
 
     Column(modifier = modifier.fillMaxSize()) {
         TextField(
@@ -55,6 +75,7 @@ fun PackagesPage(state: UiState, viewModel: MainViewModel, modifier: Modifier = 
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             label = stringResource(R.string.pkg_search_hint),
             useLabelAsPlaceholder = true,
+            cornerRadius = 24.dp,
         )
         if (packages.isEmpty()) {
             Column(Modifier.padding(16.dp)) {
@@ -65,30 +86,59 @@ fun PackagesPage(state: UiState, viewModel: MainViewModel, modifier: Modifier = 
                 )
             }
         } else {
-            LazyVerticalStaggeredGrid(
-                columns = StaggeredGridCells.Fixed(2),
+            PullToRefresh(
+                isRefreshing = refreshing,
+                onRefresh = {
+                    refreshing = true
+                    viewModel.refreshInstalled { refreshing = false }
+                },
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(metrics.margin),
-                verticalItemSpacing = metrics.gap,
-                horizontalArrangement = Arrangement.spacedBy(metrics.gap),
+                pullToRefreshState = pullState,
             ) {
-                items(packages, key = { it.name }) { pkg ->
-                    PackageCard(
-                        pkg = pkg,
-                        metrics = metrics,
-                        onClick = { detail = pkg },
-                        onRemove = { pendingRemove = pkg },
-                    )
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(
+                        start = metrics.margin,
+                        end = metrics.margin,
+                        top = metrics.margin,
+                        bottom = metrics.margin + 80.dp,
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(metrics.gap),
+                    horizontalArrangement = Arrangement.spacedBy(metrics.gap),
+                ) {
+                    items(packages, key = { it.name }) { pkg ->
+                        PackageCard(
+                            pkg = pkg,
+                            metrics = metrics,
+                            query = state.query,
+                            onClick = { openDetail(pkg) },
+                            onRemove = { removeRequest(pkg) },
+                        )
+                    }
                 }
             }
         }
     }
 
+    PackageDialogs(detail, pendingRemove, viewModel) {
+        detail = null
+        pendingRemove = null
+    }
+}
+
+@Composable
+internal fun PackageDialogs(
+    detail: InstalledPackage?,
+    pendingRemove: InstalledPackage?,
+    viewModel: MainViewModel,
+    onDismiss: () -> Unit,
+) {
     detail?.let { pkg ->
         OverlayBottomSheet(
             show = true,
             title = pkg.name,
-            onDismissRequest = { detail = null },
+            onDismissRequest = onDismiss,
         ) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 InfoRow(stringResource(R.string.pkg_version), pkg.version)
@@ -108,7 +158,7 @@ fun PackagesPage(state: UiState, viewModel: MainViewModel, modifier: Modifier = 
         OverlayBottomSheet(
             show = true,
             title = stringResource(R.string.pkg_uninstall_title),
-            onDismissRequest = { pendingRemove = null },
+            onDismissRequest = onDismiss,
         ) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
@@ -118,12 +168,12 @@ fun PackagesPage(state: UiState, viewModel: MainViewModel, modifier: Modifier = 
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     TextButton(
                         text = stringResource(R.string.pkg_cancel),
-                        onClick = { pendingRemove = null },
+                        onClick = onDismiss,
                     )
                     Button(
                         onClick = {
                             viewModel.uninstall(pkg.name)
-                            pendingRemove = null
+                            onDismiss()
                         },
                         colors = ButtonDefaults.buttonColorsPrimary(),
                     ) {
@@ -136,9 +186,10 @@ fun PackagesPage(state: UiState, viewModel: MainViewModel, modifier: Modifier = 
 }
 
 @Composable
-private fun PackageCard(
+internal fun PackageCard(
     pkg: InstalledPackage,
     metrics: PackageCardMetrics,
+    query: String,
     onClick: () -> Unit,
     onRemove: () -> Unit,
 ) {
@@ -155,7 +206,7 @@ private fun PackageCard(
                 verticalArrangement = Arrangement.Center,
             ) {
                 Text(
-                    pkg.name,
+                    highlight(pkg.name, query),
                     style = MiuixTheme.textStyles.title3.copy(fontSize = metrics.nameSize),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -194,6 +245,29 @@ private fun PackageCard(
                     height = metrics.buttonHeight,
                 )
             }
+        }
+    }
+}
+
+/** 搜索高亮：包含匹配的关键字加粗并着色 */
+@Composable
+internal fun highlight(text: String, query: String): AnnotatedString {
+    val trimmed = query.trim()
+    if (trimmed.isEmpty()) return AnnotatedString(text)
+    val color = MiuixTheme.colorScheme.primary
+    return buildAnnotatedString {
+        var index = 0
+        while (index < text.length) {
+            val match = text.indexOf(trimmed, index, ignoreCase = true)
+            if (match < 0) {
+                append(text.substring(index))
+                break
+            }
+            append(text.substring(index, match))
+            withStyle(SpanStyle(color = color, fontWeight = FontWeight.Bold)) {
+                append(text.substring(match, match + trimmed.length))
+            }
+            index = match + trimmed.length
         }
     }
 }

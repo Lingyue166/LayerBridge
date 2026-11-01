@@ -12,7 +12,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.size
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
@@ -58,6 +61,25 @@ internal fun SectionCard(
         ) {
             Text(title, style = MiuixTheme.textStyles.title3)
             content()
+        }
+    }
+}
+
+/** 三横杠菜单图标 24dp 圆角线 */
+@Composable
+internal fun MenuIcon(tint: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier.size(24.dp)) {
+        val stroke = size.height / 12f
+        val radius = stroke
+        val left = size.width * 0.15f
+        val right = size.width * 0.85f
+        listOf(0.3f, 0.5f, 0.7f).forEach { y ->
+            drawRoundRect(
+                color = tint,
+                topLeft = androidx.compose.ui.geometry.Offset(left, size.height * y - stroke / 2),
+                size = androidx.compose.ui.geometry.Size(right - left, stroke),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(radius, radius),
+            )
         }
     }
 }

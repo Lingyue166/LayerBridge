@@ -98,4 +98,11 @@
     <string name="pkg_signer">签名者</string>
     <string name="pkg_scan">检测</string>
     <string name="pkg_depends">依赖</string>
+
+    <string name="pkg_install_multiple">已选 %1$d 个文件 全部安装</string>
+    <string name="pkg_confirm_install">安装</string>
+
+    <string name="menu_cards">卡片流</string>
+    <string name="menu_graph">依赖图</string>
+    <string name="menu_refresh">刷新</string>
 </resources>
