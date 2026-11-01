@@ -52,7 +52,17 @@ fun PackagesPage(
     modifier: Modifier = Modifier,
 ) {
     if (graphMode) {
-        DependencyGraph(state, viewModel, modifier)
+        Column(modifier = modifier.fillMaxSize()) {
+            TextField(
+                value = state.query,
+                onValueChange = viewModel::setQuery,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                label = stringResource(R.string.pkg_search_hint),
+                useLabelAsPlaceholder = true,
+                cornerRadius = 24.dp,
+            )
+            DependencyGraph(state, viewModel, Modifier.weight(1f))
+        }
         return
     }
     val metrics = rememberPackageCardMetrics()
