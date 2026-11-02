@@ -80,11 +80,17 @@ internal fun DependencyGraph(state: UiState, viewModel: MainViewModel, modifier:
         result
     }
 
+    // 取消高亮时保留上一棵树 让动画从当前颜色平滑退回 而不是瞬间跳色
+    var lastSet by remember { mutableStateOf<Set<String>>(emptySet()) }
+    LaunchedEffect(selected) {
+        if (selected != null) lastSet = highlightSet
+    }
     val highlightProgress by animateFloatAsState(
         targetValue = if (selected != null) 1f else 0f,
         animationSpec = tween(240),
         label = "treeHighlight",
     )
+    val activeSet = if (selected != null) highlightSet else lastSet
     var viewport by remember { mutableStateOf(IntSize.Zero) }
     var scale by remember { mutableStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
@@ -161,19 +167,18 @@ internal fun DependencyGraph(state: UiState, viewModel: MainViewModel, modifier:
                     val startY = with(density) { (start.second + PAD_DP).dp.toPx() }
                     val endX = with(density) { (end.first + PAD_DP).dp.toPx() }
                     val endY = with(density) { (end.second + PAD_DP).dp.toPx() }
-                    val active = selected == null || (
-                        layout.nodes.any {
-                            it.x + it.width == start.first &&
-                                it.y + it.height / 2 == start.second &&
-                                it.id in highlightSet
-                        } && layout.nodes.any {
-                            it.x == end.first &&
-                                it.y + it.height / 2 == end.second &&
-                                it.id in highlightSet
-                        }
-                        )
-                    val color = if (active) lineColor else lineColor.copy(alpha = 1f - 0.85f * highlightProgress)
-                    val width = if (active) stroke * (1f + 0.6f * highlightProgress) else stroke
+                    val inTree = layout.nodes.any {
+                        it.x + it.width == start.first &&
+                            it.y + it.height / 2 == start.second &&
+                            it.id in activeSet
+                    } && layout.nodes.any {
+                        it.x == end.first &&
+                            it.y + it.height / 2 == end.second &&
+                            it.id in activeSet
+                    }
+                    val dimAlpha = 1f - 0.85f * highlightProgress
+                    val color = if (inTree) lineColor else lineColor.copy(alpha = dimAlpha)
+                    val width = if (inTree) stroke * (1f + 0.6f * highlightProgress) else stroke
                     val control = (endX - startX) / 2f
                     val path = Path()
                     path.moveTo(startX, startY)
@@ -202,9 +207,9 @@ internal fun DependencyGraph(state: UiState, viewModel: MainViewModel, modifier:
                         query = state.query,
                         onClick = { detail = pkg },
                         onRemove = { pendingRemove = pkg },
-                        highlighted = selected != null && node.id in highlightSet,
-                        treeAlpha = if (selected == null || node.id in highlightSet) 1f else 1f - 0.65f * highlightProgress,
-                        highlightAlpha = if (selected != null && node.id in highlightSet) highlightProgress else 0f,
+                        highlighted = node.id in activeSet,
+                        treeAlpha = if (node.id in activeSet) 1f else 1f - 0.65f * highlightProgress,
+                        highlightAlpha = if (node.id in activeSet) highlightProgress else 0f,
                         onDoubleTap = { selected = if (selected == node.id) null else node.id },
                     )
                 }
