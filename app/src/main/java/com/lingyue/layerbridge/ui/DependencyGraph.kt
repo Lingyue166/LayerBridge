@@ -1,7 +1,7 @@
 package com.lingyue.layerbridge.ui
 
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -81,17 +81,19 @@ internal fun DependencyGraph(state: UiState, viewModel: MainViewModel, modifier:
         result
     }
 
-    // 取消高亮时保留上一棵树 让动画从当前颜色平滑退回 而不是瞬间跳色
-    var lastSet by remember { mutableStateOf<Set<String>>(emptySet()) }
+    // 动画期间显示的树 切到 nullptr 时保留它淡出 结束后再清空
+    var shownSet by remember { mutableStateOf<Set<String>>(emptySet()) }
+    val highlightProgress = remember { Animatable(0f) }
     LaunchedEffect(selected) {
-        if (selected != null) lastSet = highlightSet
+        if (selected != null) {
+            shownSet = highlightSet
+            if (highlightProgress.value > 0f) highlightProgress.snapTo(0f)
+            highlightProgress.animateTo(1f, tween(durationMillis = 480, easing = FastOutSlowInEasing))
+        } else if (shownSet.isNotEmpty()) {
+            highlightProgress.animateTo(0f, tween(durationMillis = 480, easing = FastOutSlowInEasing))
+            shownSet = emptySet()
+        }
     }
-    val highlightProgress by animateFloatAsState(
-        targetValue = if (selected != null) 1f else 0f,
-        animationSpec = tween(durationMillis = 480, easing = FastOutSlowInEasing),
-        label = "treeHighlight",
-    )
-    val activeSet = if (selected != null) highlightSet else lastSet
     var viewport by remember { mutableStateOf(IntSize.Zero) }
     var scale by remember { mutableStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
@@ -171,15 +173,15 @@ internal fun DependencyGraph(state: UiState, viewModel: MainViewModel, modifier:
                     val inTree = layout.nodes.any {
                         it.x + it.width == start.first &&
                             it.y + it.height / 2 == start.second &&
-                            it.id in activeSet
+                            it.id in shownSet
                     } && layout.nodes.any {
                         it.x == end.first &&
                             it.y + it.height / 2 == end.second &&
-                            it.id in activeSet
+                            it.id in shownSet
                     }
-                    val dimAlpha = 1f - 0.85f * highlightProgress
+                    val dimAlpha = 1f - 0.85f * highlightProgress.value
                     val color = if (inTree) lineColor else lineColor.copy(alpha = dimAlpha)
-                    val width = if (inTree) stroke * (1f + 0.6f * highlightProgress) else stroke
+                    val width = if (inTree) stroke * (1f + 0.6f * highlightProgress.value) else stroke
                     val control = (endX - startX) / 2f
                     val path = Path()
                     path.moveTo(startX, startY)
@@ -208,9 +210,9 @@ internal fun DependencyGraph(state: UiState, viewModel: MainViewModel, modifier:
                         query = state.query,
                         onClick = { detail = pkg },
                         onRemove = { pendingRemove = pkg },
-                        highlighted = node.id in activeSet,
-                        treeAlpha = if (node.id in activeSet) 1f else 1f - 0.65f * highlightProgress,
-                        highlightAlpha = if (node.id in activeSet) highlightProgress else 0f,
+                        highlighted = node.id in shownSet && highlightProgress.value > 0f,
+                        treeAlpha = if (node.id in shownSet) 1f else 1f - 0.65f * highlightProgress.value,
+                        highlightAlpha = if (node.id in shownSet && highlightProgress.value > 0f) highlightProgress.value else 0f,
                         onDoubleTap = { selected = if (selected == node.id) null else node.id },
                     )
                 }
