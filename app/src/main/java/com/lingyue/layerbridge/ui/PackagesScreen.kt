@@ -221,17 +221,19 @@ internal fun PackageCard(
     onRemove: () -> Unit,
     highlighted: Boolean = false,
     dimmed: Boolean = false,
+    treeAlpha: Float = if (dimmed) 0.3f else 1f,
+    highlightAlpha: Float = if (highlighted) 1f else 0f,
     onDoubleTap: (() -> Unit)? = null,
 ) {
     val baseModifier = Modifier
         .width(metrics.cardWidth)
         .height(metrics.cardHeight)
-        .alpha(if (dimmed) 0.3f else 1f)
+        .alpha(treeAlpha)
         .then(
             if (highlighted) {
                 Modifier.border(
                     2.dp,
-                    MiuixTheme.colorScheme.primary,
+                    MiuixTheme.colorScheme.primary.copy(alpha = highlightAlpha.coerceIn(0f, 1f)),
                     androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
                 )
             } else Modifier,

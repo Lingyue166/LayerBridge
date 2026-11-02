@@ -1,5 +1,7 @@
 package com.lingyue.layerbridge.ui
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -16,6 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
@@ -77,6 +80,11 @@ internal fun DependencyGraph(state: UiState, viewModel: MainViewModel, modifier:
         result
     }
 
+    val highlightProgress by animateFloatAsState(
+        targetValue = if (selected != null) 1f else 0f,
+        animationSpec = tween(240),
+        label = "treeHighlight",
+    )
     var viewport by remember { mutableStateOf(IntSize.Zero) }
     var scale by remember { mutableStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
@@ -164,8 +172,8 @@ internal fun DependencyGraph(state: UiState, viewModel: MainViewModel, modifier:
                                 it.id in highlightSet
                         }
                         )
-                    val color = if (active) lineColor else lineColor.copy(alpha = 0.15f)
-                    val width = if (selected != null && active) stroke * 1.6f else stroke
+                    val color = if (active) lineColor else lineColor.copy(alpha = 1f - 0.85f * highlightProgress)
+                    val width = if (active) stroke * (1f + 0.6f * highlightProgress) else stroke
                     val control = (endX - startX) / 2f
                     val path = Path()
                     path.moveTo(startX, startY)
@@ -195,7 +203,8 @@ internal fun DependencyGraph(state: UiState, viewModel: MainViewModel, modifier:
                         onClick = { detail = pkg },
                         onRemove = { pendingRemove = pkg },
                         highlighted = selected != null && node.id in highlightSet,
-                        dimmed = selected != null && node.id !in highlightSet,
+                        treeAlpha = if (selected == null || node.id in highlightSet) 1f else 1f - 0.65f * highlightProgress,
+                        highlightAlpha = if (selected != null && node.id in highlightSet) highlightProgress else 0f,
                         onDoubleTap = { selected = if (selected == node.id) null else node.id },
                     )
                 }
