@@ -211,6 +211,9 @@ internal fun PackageDialogs(
     }
 }
 
+/** 卡片高亮状态：UI 内部据此选择透明度 外部只传语义 */
+internal enum class CardHighlight { None, Active, Dimmed }
+
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 internal fun PackageCard(
@@ -219,21 +222,34 @@ internal fun PackageCard(
     query: String,
     onClick: () -> Unit,
     onRemove: () -> Unit,
-    highlighted: Boolean = false,
-    dimmed: Boolean = false,
-    treeAlpha: Float = if (dimmed) 0.3f else 1f,
-    highlightAlpha: Float = if (highlighted) 1f else 0f,
+    highlight: CardHighlight = CardHighlight.None,
     onDoubleTap: (() -> Unit)? = null,
 ) {
+    // 透明度只在 UI 层定义：默认 1 淡出 0.35 恢复即回到默认
+    val targetAlpha = when (highlight) {
+        CardHighlight.None, CardHighlight.Active -> 1f
+        CardHighlight.Dimmed -> 0.35f
+    }
+    val targetBorder = if (highlight == CardHighlight.Active) 1f else 0f
+    val animatedAlpha by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = targetAlpha,
+        animationSpec = androidx.compose.animation.core.tween(480),
+        label = "cardAlpha",
+    )
+    val borderAlpha by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = targetBorder,
+        animationSpec = androidx.compose.animation.core.tween(480),
+        label = "cardBorder",
+    )
     val baseModifier = Modifier
         .width(metrics.cardWidth)
         .height(metrics.cardHeight)
-        .alpha(treeAlpha)
+        .alpha(animatedAlpha)
         .then(
-            if (highlighted) {
+            if (borderAlpha > 0f) {
                 Modifier.border(
                     2.dp,
-                    MiuixTheme.colorScheme.primary.copy(alpha = highlightAlpha.coerceIn(0f, 1f)),
+                    MiuixTheme.colorScheme.primary.copy(alpha = borderAlpha),
                     androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
                 )
             } else Modifier,

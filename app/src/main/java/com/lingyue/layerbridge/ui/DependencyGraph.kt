@@ -210,9 +210,11 @@ internal fun DependencyGraph(state: UiState, viewModel: MainViewModel, modifier:
                         query = state.query,
                         onClick = { detail = pkg },
                         onRemove = { pendingRemove = pkg },
-                        highlighted = node.id in shownSet && highlightProgress.value > 0f,
-                        treeAlpha = if (node.id in shownSet) 1f else 1f - 0.65f * highlightProgress.value,
-                        highlightAlpha = if (node.id in shownSet && highlightProgress.value > 0f) highlightProgress.value else 0f,
+                        highlight = when {
+                            shownSet.isEmpty() -> CardHighlight.None
+                            node.id in shownSet -> CardHighlight.Active
+                            else -> CardHighlight.Dimmed
+                        },
                         onDoubleTap = { selected = if (selected == node.id) null else node.id },
                     )
                 }
