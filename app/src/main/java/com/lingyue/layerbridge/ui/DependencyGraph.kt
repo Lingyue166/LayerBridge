@@ -1,5 +1,6 @@
 package com.lingyue.layerbridge.ui
 
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -87,7 +88,7 @@ internal fun DependencyGraph(state: UiState, viewModel: MainViewModel, modifier:
     }
     val highlightProgress by animateFloatAsState(
         targetValue = if (selected != null) 1f else 0f,
-        animationSpec = tween(240),
+        animationSpec = tween(durationMillis = 480, easing = FastOutSlowInEasing),
         label = "treeHighlight",
     )
     val activeSet = if (selected != null) highlightSet else lastSet
