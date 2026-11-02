@@ -24,7 +24,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.AnnotatedString
@@ -35,7 +36,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -231,29 +233,33 @@ internal fun PackageCard(
         CardHighlight.Dimmed -> 0.35f
     }
     val targetBorder = if (highlight == CardHighlight.Active) 1f else 0f
-    val animatedAlpha by androidx.compose.animation.core.animateFloatAsState(
+    val alphaAnim = androidx.compose.animation.core.animateFloatAsState(
         targetValue = targetAlpha,
         animationSpec = androidx.compose.animation.core.tween(480),
         label = "cardAlpha",
     )
-    val borderAlpha by androidx.compose.animation.core.animateFloatAsState(
+    val borderAnim = androidx.compose.animation.core.animateFloatAsState(
         targetValue = targetBorder,
         animationSpec = androidx.compose.animation.core.tween(480),
         label = "cardBorder",
     )
+    val borderColor = MiuixTheme.colorScheme.primary
+    // 透明度与边框走 draw/layer 阶段 不触发逐帧重组
     val baseModifier = Modifier
         .width(metrics.cardWidth)
         .height(metrics.cardHeight)
-        .alpha(animatedAlpha)
-        .then(
+        .graphicsLayer { alpha = alphaAnim.value }
+        .drawWithContent {
+            drawContent()
+            val borderAlpha = borderAnim.value
             if (borderAlpha > 0f) {
-                Modifier.border(
-                    2.dp,
-                    MiuixTheme.colorScheme.primary.copy(alpha = borderAlpha),
-                    androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
+                drawRoundRect(
+                    color = borderColor.copy(alpha = borderAlpha),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx()),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(20.dp.toPx()),
                 )
-            } else Modifier,
-        )
+            }
+        }
     val content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit = {
         Column(Modifier.fillMaxSize()) {
             Column(
