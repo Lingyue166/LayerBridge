@@ -215,6 +215,7 @@ internal fun DependencyGraph(state: UiState, viewModel: MainViewModel, modifier:
                             node.id in shownSet -> CardHighlight.Active
                             else -> CardHighlight.Dimmed
                         },
+                        highlightProgress = { highlightProgress.value },
                         onDoubleTap = { selected = if (selected == node.id) null else node.id },
                     )
                 }

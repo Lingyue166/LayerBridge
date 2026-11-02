@@ -225,39 +225,32 @@ internal fun PackageCard(
     onClick: () -> Unit,
     onRemove: () -> Unit,
     highlight: CardHighlight = CardHighlight.None,
+    // 与依赖图共用同一个高亮时钟 避免各视图各自动画导致不同步
+    highlightProgress: () -> Float = { 0f },
     onDoubleTap: (() -> Unit)? = null,
 ) {
-    // 透明度只在 UI 层定义：默认 1 淡出 0.35 恢复即回到默认
-    val targetAlpha = when (highlight) {
-        CardHighlight.None, CardHighlight.Active -> 1f
-        CardHighlight.Dimmed -> 0.35f
-    }
-    val targetBorder = if (highlight == CardHighlight.Active) 1f else 0f
-    val alphaAnim = androidx.compose.animation.core.animateFloatAsState(
-        targetValue = targetAlpha,
-        animationSpec = androidx.compose.animation.core.tween(480),
-        label = "cardAlpha",
-    )
-    val borderAnim = androidx.compose.animation.core.animateFloatAsState(
-        targetValue = targetBorder,
-        animationSpec = androidx.compose.animation.core.tween(480),
-        label = "cardBorder",
-    )
     val borderColor = MiuixTheme.colorScheme.primary
-    // 透明度与边框走 draw/layer 阶段 不触发逐帧重组
     val baseModifier = Modifier
         .width(metrics.cardWidth)
         .height(metrics.cardHeight)
-        .graphicsLayer { alpha = alphaAnim.value }
+        .graphicsLayer {
+            alpha = if (highlight == CardHighlight.Dimmed) {
+                1f - 0.65f * highlightProgress()
+            } else {
+                1f
+            }
+        }
         .drawWithContent {
             drawContent()
-            val borderAlpha = borderAnim.value
-            if (borderAlpha > 0f) {
-                drawRoundRect(
-                    color = borderColor.copy(alpha = borderAlpha),
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx()),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(20.dp.toPx()),
-                )
+            if (highlight == CardHighlight.Active) {
+                val borderAlpha = highlightProgress()
+                if (borderAlpha > 0f) {
+                    drawRoundRect(
+                        color = borderColor.copy(alpha = borderAlpha),
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx()),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(20.dp.toPx()),
+                    )
+                }
             }
         }
     val content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit = {
