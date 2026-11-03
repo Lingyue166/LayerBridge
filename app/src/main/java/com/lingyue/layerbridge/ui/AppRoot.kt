@@ -99,7 +99,7 @@ fun AppRoot(viewModel: MainViewModel = viewModel()) {
                                             text = stringResource(
                                                 if (graphMode) R.string.menu_cards else R.string.menu_graph,
                                             ),
-                                            optionSize = 2,
+                                            optionSize = 3,
                                             isSelected = graphMode,
                                             index = 0,
                                             onSelectedIndexChange = {
@@ -109,11 +109,21 @@ fun AppRoot(viewModel: MainViewModel = viewModel()) {
                                         )
                                         DropdownImpl(
                                             text = stringResource(R.string.menu_refresh),
-                                            optionSize = 2,
+                                            optionSize = 3,
                                             isSelected = false,
                                             index = 1,
                                             onSelectedIndexChange = {
                                                 viewModel.refreshInstalled()
+                                                menuOpen = false
+                                            },
+                                        )
+                                        DropdownImpl(
+                                            text = stringResource(R.string.menu_repair_env),
+                                            optionSize = 3,
+                                            isSelected = false,
+                                            index = 2,
+                                            onSelectedIndexChange = {
+                                                viewModel.repairEnvironment()
                                                 menuOpen = false
                                             },
                                         )

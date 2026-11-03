@@ -105,4 +105,6 @@
     <string name="menu_cards">Card list</string>
     <string name="menu_graph">Dependency graph</string>
     <string name="menu_refresh">Refresh</string>
+
+    <string name="menu_repair_env">Repair environment</string>
 </resources>

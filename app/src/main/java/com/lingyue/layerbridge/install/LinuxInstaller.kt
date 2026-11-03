@@ -133,7 +133,7 @@ class LinuxInstaller(
                     scan = if (policy.malwareScan) "pass" else "skipped",
                     scriptsStatus = scriptsStatus,
                     relations = relations,
-                ).also { finishInstall(it, paths, dataFiles, updateLinks, onLog) }
+                ).also { finishInstall(it, paths, dataFiles, emptyMap(), updateLinks, onLog) }
             } catch (t: Throwable) {
                 maintainerScripts.clear(name)
                 throw t
@@ -239,7 +239,9 @@ class LinuxInstaller(
                     scriptsStatus = scriptsStatus,
                     relations = relations,
                     removeHooks = removeHooks,
-                ).also { finishInstall(it, paths, dataFiles, updateLinks, onLog) }
+                ).also {
+                    finishInstall(it, paths, dataFiles, parsed.manifest.env.orEmpty(), updateLinks, onLog)
+                }
             } catch (t: Throwable) {
                 maintainerScripts.clear(name)
                 throw t
@@ -314,6 +316,7 @@ class LinuxInstaller(
                 }
                 maintainerScripts.clear(name)
                 purgePackageDirs(name)
+                clearPackageEnv(name)
                 syncRootLinks()
                 writeEnvFile()
                 onLog("[lb] removed $name (${removal.size} files)")
@@ -322,6 +325,71 @@ class LinuxInstaller(
 
     suspend fun refreshEnvironment(): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching { writeEnvFile() }
+    }
+
+    /**
+     * 扫描已安装包补写缺失的环境文件 并重写对应 wrapper。
+     * 旧版本安装的包没有 env 文件 这里会尝试在下载目录里找同名包重新解析 manifest。
+     */
+    suspend fun repairEnvironment(
+        searchDirs: List<File>? = null,
+        onLog: (String) -> Unit = {},
+    ): Int = withContext(Dispatchers.IO) {
+        val dirs = searchDirs ?: defaultPackageDirs()
+        val packages = statusDb.load()
+        var repaired = 0
+        packages.forEach { pkg ->
+            val envFile = File(LbPaths.ENV_DIR, "${pkg.name}.env")
+            var env = runCatching { EnvFile.parsePackageEnv(envFile.readText()) }.getOrDefault(emptyMap())
+            if (env.isEmpty()) {
+                env = findPackageEnv(pkg.name, dirs)
+                if (env.isNotEmpty()) {
+                    writePackageEnv(pkg.name, env)
+                    onLog("[lb] repaired env: ${pkg.name} (${env.size})")
+                }
+            }
+            if (env.isNotEmpty()) {
+                writeWrappers(pkg.name, statusDb.readFileList(pkg.name), env)
+                repaired++
+            }
+        }
+        writeEnvFile()
+        onLog("[lb] environment repair done: $repaired packages")
+        repaired
+    }
+
+    private fun defaultPackageDirs(): List<File> = listOf(
+        File("/sdcard/Download"),
+        File("/sdcard/Download/lb-repo/lbpa"),
+        File("/sdcard/Download/lb-repo-lbpa"),
+    )
+
+    private fun findPackageEnv(name: String, dirs: List<File>): Map<String, String> {
+        val candidates = dirs.flatMap { dir ->
+            dir.listFiles().orEmpty().filter {
+                it.isFile && it.name.endsWith(".lbpa") && it.name.startsWith("${name}_")
+            }
+        }
+        candidates.forEach { file ->
+            val env = runCatching {
+                LbpaFile.parse(file).manifest.env.orEmpty()
+            }.getOrDefault(emptyMap())
+            if (env.isNotEmpty()) return env
+        }
+        return emptyMap()
+    }
+
+    private suspend fun writePackageEnv(name: String, env: Map<String, String>) {
+        val file = File(LbPaths.ENV_DIR, "$name.env")
+        if (env.isEmpty()) {
+            clearPackageEnv(name)
+            return
+        }
+        Shell.writeFile(file.path, EnvFile.renderPackageEnv(env), "644")
+    }
+
+    private suspend fun clearPackageEnv(name: String) {
+        Shell.exec("rm -f ${PathGuard.quote("${LbPaths.ENV_DIR}/$name.env")}")
     }
 
     /**
@@ -348,6 +416,7 @@ class LinuxInstaller(
         pkg: InstalledPackage,
         paths: List<String>,
         dataFiles: List<String>,
+        env: Map<String, String>,
         updateLinks: Boolean,
         onLog: (String) -> Unit,
     ) {
@@ -359,11 +428,12 @@ class LinuxInstaller(
         onLog("[lb]   state: ${elapsedMs(tStatus)} ms")
 
         val tEnv = System.nanoTime()
+        writePackageEnv(pkg.name, env)
         writeEnvFile()
         onLog("[lb]   env: ${elapsedMs(tEnv)} ms")
 
         val tWrap = System.nanoTime()
-        writeWrappers(pkg.name, paths)
+        writeWrappers(pkg.name, paths, env)
         onLog("[lb]   wrappers: ${wrapperCommands(paths).size} (${elapsedMs(tWrap)} ms)")
 
         if (updateLinks) {
@@ -512,10 +582,38 @@ class LinuxInstaller(
     }
 
     private suspend fun writeEnvFile() {
-        Shell.writeFile(LbPaths.ENV_FILE, "${EnvFile.HEADER}\n${EnvFile.render()}", "644")
+        val packageEnv = loadPackageEnv()
+        Shell.writeFile(
+            LbPaths.ENV_FILE,
+            "${EnvFile.HEADER}\n${EnvFile.render(packageEnv)}",
+            "644",
+        )
     }
 
-    private suspend fun writeWrappers(owner: String, paths: List<String>) {
+    /** 读取 env.d 下的包环境 逐行解析 旧版本缺失目录时返回空。 */
+    private suspend fun loadPackageEnv(): Map<String, Map<String, String>> {
+        val listing = Shell.exec("ls -1 ${PathGuard.quote(LbPaths.ENV_DIR)} 2>/dev/null").output
+        val result = mutableMapOf<String, Map<String, String>>()
+        listing.lineSequence()
+            .map { it.trim() }
+            .filter { it.endsWith(".env") }
+            .sorted()
+            .forEach { file ->
+                val name = file.removeSuffix(".env")
+                val text = Shell.exec(
+                    "cat ${PathGuard.quote("${LbPaths.ENV_DIR}/$file")} 2>/dev/null",
+                ).output
+                val env = EnvFile.parsePackageEnv(text)
+                if (env.isNotEmpty()) result[name] = env
+            }
+        return result
+    }
+
+    private suspend fun writeWrappers(
+        owner: String,
+        paths: List<String>,
+        env: Map<String, String> = emptyMap(),
+    ) {
         val mode = exposeMode()
         val moduleReady = Shell.exec("test -d ${PathGuard.quote(LbPaths.MODULE_DIR)}").isSuccess
         paths.asSequence()
@@ -523,7 +621,7 @@ class LinuxInstaller(
             .map { it to it.substringAfterLast('/') }
             .filter { (_, command) -> isExposableCommand(command) }
             .forEach { (path, command) ->
-                val script = Wrapper.script(path, owner = owner)
+                val script = Wrapper.script(path, extraEnv = env, owner = owner)
                 ExposeTargets.of(mode, command, moduleReady).forEach { target ->
                     Shell.writeFile(target, script, "755")
                 }

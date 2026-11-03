@@ -40,8 +40,10 @@ object LbMain {
             0
         }
         "env" -> {
-            env()
-            0
+            if (args.getOrNull(1) == "--fix") envFix() else {
+                env()
+                0
+            }
         }
         "list" -> list()
         "info" -> info(args.drop(1))
@@ -81,6 +83,12 @@ object LbMain {
             if (tokens.first() in EXIT_COMMANDS) return 0
             dispatch(tokens)
         }
+    }
+
+    private fun envFix(): Int = runBlocking {
+        val repaired = createInstaller().repairEnvironment(onLog = ::println)
+        println("[lb] repaired: $repaired")
+        0
     }
 
     private fun env() {

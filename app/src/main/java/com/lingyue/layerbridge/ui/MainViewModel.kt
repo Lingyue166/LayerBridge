@@ -179,6 +179,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }.getOrNull()
 
+    fun repairEnvironment() {
+        if (!busy.compareAndSet(false, true)) return notifyBusy()
+        viewModelScope.launch {
+            try {
+                val repaired = withContext(Dispatchers.IO) {
+                    installer.repairEnvironment { appendLog(it) }
+                }
+                appendLog("[lb] environment repaired: $repaired")
+                refreshInstalled()
+            } finally {
+                busy.set(false)
+            }
+        }
+    }
+
     fun refreshRuntime() {
         viewModelScope.launch {
             val info = withContext(Dispatchers.IO) {
