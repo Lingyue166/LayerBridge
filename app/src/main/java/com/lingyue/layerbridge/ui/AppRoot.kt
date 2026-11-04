@@ -6,6 +6,7 @@ import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.border
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,6 +36,7 @@ import top.yukonga.miuix.kmp.basic.FloatingActionButton
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.NavigationBar
+import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.NavigationBarItem
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
@@ -62,6 +64,7 @@ fun AppRoot(viewModel: MainViewModel = viewModel()) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var pendingInstall by remember { mutableStateOf<List<Uri>>(emptyList()) }
     var menuOpen by remember { mutableStateOf(false) }
+    val scrollBehavior = MiuixScrollBehavior()
     var graphMode by rememberSaveable { mutableStateOf(false) }
 
     val picker = rememberLauncherForActivityResult(
@@ -78,6 +81,7 @@ fun AppRoot(viewModel: MainViewModel = viewModel()) {
         Scaffold(
             topBar = {
                 TopAppBar(
+                    scrollBehavior = scrollBehavior,
                     title = when (tab) {
                         0 -> "LayerBridge"
                         else -> stringResource(R.string.nav_packages)
@@ -183,12 +187,21 @@ fun AppRoot(viewModel: MainViewModel = viewModel()) {
         ) { padding ->
             Box(Modifier.fillMaxSize()) {
                 when (tab) {
-                    0 -> DashboardPage(state, log, viewModel, Modifier.padding(padding))
+                    0 -> DashboardPage(
+                        state = state,
+                        log = log,
+                        viewModel = viewModel,
+                        modifier = Modifier
+                            .padding(padding)
+                            .nestedScroll(scrollBehavior.nestedScrollConnection),
+                    )
                     else -> PackagesPage(
                         state = state,
                         viewModel = viewModel,
                         graphMode = graphMode,
-                        modifier = Modifier.padding(padding),
+                        modifier = Modifier
+                            .padding(padding)
+                            .nestedScroll(scrollBehavior.nestedScrollConnection),
                     )
                 }
                 InstallConfirmDialog(

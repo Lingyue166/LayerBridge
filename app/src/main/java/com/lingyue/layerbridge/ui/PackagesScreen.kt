@@ -70,7 +70,7 @@ fun PackagesPage(
             TextField(
                 value = state.query,
                 onValueChange = { viewModel.setQuery(it.replace("\n", "")) },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                 label = stringResource(R.string.pkg_search_hint),
                 useLabelAsPlaceholder = true,
                 cornerRadius = 24.dp,
@@ -98,7 +98,7 @@ fun PackagesPage(
         TextField(
             value = state.query,
             onValueChange = { viewModel.setQuery(it.replace("\n", "")) },
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
             label = stringResource(R.string.pkg_search_hint),
             useLabelAsPlaceholder = true,
             cornerRadius = 24.dp,

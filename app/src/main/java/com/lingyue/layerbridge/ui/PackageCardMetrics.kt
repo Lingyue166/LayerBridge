@@ -30,7 +30,7 @@ internal fun rememberPackageCardMetrics(): PackageCardMetrics {
     val widthDp = LocalConfiguration.current.screenWidthDp.dp
     val density = LocalDensity.current
     return remember(widthDp, density) {
-    val margin = 16.dp
+    val margin = 12.dp
     val gap = if (widthDp < 360.dp) 8.dp else 12.dp
     val cardWidth = (widthDp - margin * 2 - gap) / 2
     val scale = (widthDp.value / 411f).coerceIn(0.9f, 1.0f)

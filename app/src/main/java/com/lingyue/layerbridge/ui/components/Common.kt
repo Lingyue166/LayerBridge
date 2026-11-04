@@ -23,7 +23,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /** 卡片内边距 统一来源 */
 internal object CardMetrics {
-    val InnerPadding = 16.dp
+    val InnerPadding = 12.dp
     val InfoPadding = 12.dp
     val ActionHeight = 62.dp
     val ButtonHeight = 44.dp
