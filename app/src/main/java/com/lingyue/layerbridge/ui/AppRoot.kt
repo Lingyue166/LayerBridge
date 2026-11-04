@@ -46,6 +46,7 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.All
 import top.yukonga.miuix.kmp.icon.extended.Home
+import top.yukonga.miuix.kmp.icon.extended.Home
 import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.basic.DropdownImpl
 import top.yukonga.miuix.kmp.basic.ListPopupColumn
@@ -198,11 +199,7 @@ fun AppRoot(viewModel: MainViewModel = viewModel()) {
                     0 -> HomePage(
                         state = state,
                         log = log,
-                        viewModel = viewModel,
-                        onOpenPackages = { tab = 1 },
-                        modifier = Modifier
-                            .padding(padding)
-                            .nestedScroll(scrollBehavior.nestedScrollConnection),
+                        modifier = Modifier.padding(padding),
                     )
                     1 -> PackagesPage(
                         state = state,
