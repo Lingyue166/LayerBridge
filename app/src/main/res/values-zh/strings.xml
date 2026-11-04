@@ -107,4 +107,36 @@
     <string name="menu_refresh">刷新</string>
 
     <string name="menu_repair_env">修复环境变量</string>
+
+    <string name="settings_title">设置</string>
+    <string name="settings_security">安全</string>
+    <string name="settings_signature">校验签名</string>
+    <string name="settings_signature_summary">拒绝没有受信任签名的包</string>
+    <string name="settings_malware">恶意检测</string>
+    <string name="settings_malware_summary">执行维护脚本前进行扫描</string>
+    <string name="settings_maintenance">维护</string>
+    <string name="settings_repair_env">修复环境变量</string>
+    <string name="settings_repair_env_summary">重建缺失的包环境与命令包装</string>
+    <string name="settings_refresh">刷新状态</string>
+    <string name="settings_refresh_summary">重新加载已安装包与运行状态</string>
+    <string name="settings_about">关于</string>
+    <string name="settings_version_note">LayerBridge 包管理器</string>
+    <string name="nav_settings">设置</string>
+
+    <string name="dash_device">设备</string>
+    <string name="dash_project">项目主页</string>
+    <string name="dash_project_summary">github.com/Lingyue166/LayerBridge</string>
+
+    <string name="home_root_granted">已获得 Root 权限</string>
+    <string name="home_root_denied">未获得 Root 权限</string>
+    <string name="home_root_manager">来自 %1$s</string>
+    <string name="home_root_summary">授予 Root 后才能管理软件包</string>
+    <string name="home_packages_title">软件包</string>
+    <string name="home_packages_summary">已安装 %1$d 个</string>
+    <string name="home_open">打开</string>
+    <string name="home_info">设备信息</string>
+    <string name="home_prefix">前缀</string>
+    <string name="home_module">模块</string>
+    <string name="home_entry">入口</string>
+    <string name="home_db">状态库</string>
 </resources>

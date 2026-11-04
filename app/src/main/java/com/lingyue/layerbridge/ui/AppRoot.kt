@@ -46,6 +46,7 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.All
 import top.yukonga.miuix.kmp.icon.extended.Home
+import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.basic.DropdownImpl
 import top.yukonga.miuix.kmp.basic.ListPopupColumn
 import top.yukonga.miuix.kmp.basic.ListPopupDefaults
@@ -84,7 +85,8 @@ fun AppRoot(viewModel: MainViewModel = viewModel()) {
                     scrollBehavior = scrollBehavior,
                     title = when (tab) {
                         0 -> "LayerBridge"
-                        else -> stringResource(R.string.nav_packages)
+                        1 -> stringResource(R.string.nav_packages)
+                        else -> stringResource(R.string.settings_title)
                     },
                     actions = {
                         if (tab == 1) {
@@ -182,26 +184,38 @@ fun AppRoot(viewModel: MainViewModel = viewModel()) {
                         icon = MiuixIcons.All,
                         label = stringResource(R.string.nav_packages),
                     )
+                    NavigationBarItem(
+                        selected = tab == 2,
+                        onClick = { tab = 2 },
+                        icon = MiuixIcons.Settings,
+                        label = stringResource(R.string.nav_settings),
+                    )
                 }
             },
         ) { padding ->
             Box(Modifier.fillMaxSize()) {
                 when (tab) {
-                    0 -> DashboardPage(
+                    0 -> HomePage(
                         state = state,
                         log = log,
                         viewModel = viewModel,
+                        onOpenPackages = { tab = 1 },
                         modifier = Modifier
                             .padding(padding)
                             .nestedScroll(scrollBehavior.nestedScrollConnection),
                     )
-                    else -> PackagesPage(
+                    1 -> PackagesPage(
                         state = state,
                         viewModel = viewModel,
                         graphMode = graphMode,
                         modifier = Modifier
                             .padding(padding)
                             .nestedScroll(scrollBehavior.nestedScrollConnection),
+                    )
+                    else -> SettingsPage(
+                        state = state,
+                        viewModel = viewModel,
+                        modifier = Modifier.padding(padding),
                     )
                 }
                 InstallConfirmDialog(
